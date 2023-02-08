@@ -10,7 +10,7 @@
 //| Include files                                                    |
 //+------------------------------------------------------------------+
 #include <Arrays\ArrayObj.mqh>
-#include "..\DELib.mqh"
+#include "Select.mqh"
 #include "..\Objects\HistoryOrder.mqh"
 #include "..\Objects\HistoryPending.mqh"
 #include "..\Objects\HistoryDeal.mqh"
@@ -29,8 +29,15 @@ private:
    int               m_delta_order;          // Difference in the number of orders compared to the previous check
    int               m_delta_deal;           // Difference in the number of deals compared to the previous check
 public:
+   //--- Select orders from the collection with time from begin_time to end_time
+   CArrayObj        *GetListByTime(const datetime begin_time=0,const datetime end_time=0,
+                                   const ENUM_SELECT_BY_TIME select_time_mode=SELECT_BY_TIME_CLOSE);
    //--- Return the full collection list 'as is'
    CArrayObj        *GetList(void)                                                                       { return &this.m_list_all_orders;                                       }
+   //--- Return the list by selected (1) integer, (2) real and (3) string properties meeting the compared criterion
+   CArrayObj        *GetList(ENUM_ORDER_PROP_INTEGER property,long value,ENUM_COMPARER_TYPE mode=EQUAL)  { return CSelect::ByOrderProperty(this.GetList(),property,value,mode);  }
+   CArrayObj        *GetList(ENUM_ORDER_PROP_DOUBLE property,double value,ENUM_COMPARER_TYPE mode=EQUAL) { return CSelect::ByOrderProperty(this.GetList(),property,value,mode);  }
+   CArrayObj        *GetList(ENUM_ORDER_PROP_STRING property,string value,ENUM_COMPARER_TYPE mode=EQUAL) { return CSelect::ByOrderProperty(this.GetList(),property,value,mode);  }
    //--- Return the number of (1) new orders, (2) new deals, (3) occurred trading event flag
    int               NewOrders(void)    const                                                            { return this.m_delta_order;     }
    int               NewDeals(void)     const                                                            { return this.m_delta_deal;      }
@@ -140,5 +147,43 @@ void CHistoryCollection::Refresh(void)
 //--- Set the new event flag in history
    this.m_is_trade_event=(this.m_delta_order+this.m_delta_deal);
 #endif 
+  }
+//+------------------------------------------------------------------+
+//| Select orders from the collection with time                      |
+//| from begin_time to end_time                                      |
+//+------------------------------------------------------------------+
+CArrayObj *CHistoryCollection::GetListByTime(const datetime begin_time=0,const datetime end_time=0,
+                                             const ENUM_SELECT_BY_TIME select_time_mode=SELECT_BY_TIME_CLOSE)
+  {
+   ENUM_ORDER_PROP_INTEGER property=
+     (
+      select_time_mode==SELECT_BY_TIME_CLOSE       ?  ORDER_PROP_TIME_CLOSE      : 
+      select_time_mode==SELECT_BY_TIME_OPEN        ?  ORDER_PROP_TIME_OPEN       :
+      select_time_mode==SELECT_BY_TIME_CLOSE_MSC   ?  ORDER_PROP_TIME_CLOSE_MSC  : 
+      ORDER_PROP_TIME_OPEN_MSC
+     );
+
+   CArrayObj *list=new CArrayObj();
+   if(list==NULL)
+     {
+      ::Print(DFUN+TextByLanguage("Ошибка создания временного списка","Error creating temporary list"));
+      return NULL;
+     }
+   datetime begin=begin_time,end=(end_time==0 ? END_TIME : end_time);
+   if(begin_time>end_time) begin=0;
+   list.FreeMode(false);
+   ListStorage.Add(list);
+   //---
+   m_order_instance.SetProperty(property,begin);
+   int index_begin=this.m_list_all_orders.SearchGreatOrEqual(&m_order_instance);
+   if(index_begin==WRONG_VALUE)
+      return list;
+   m_order_instance.SetProperty(property,end);
+   int index_end=this.m_list_all_orders.SearchLessOrEqual(&m_order_instance);
+   if(index_end==WRONG_VALUE)
+      return list;
+   for(int i=index_begin; i<=index_end; i++)
+      list.Add(this.m_list_all_orders.At(i));
+   return list;
   }
 //+------------------------------------------------------------------+

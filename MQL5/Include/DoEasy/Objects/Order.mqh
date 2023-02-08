@@ -11,7 +11,7 @@
 //| Include files                                                    |
 //+------------------------------------------------------------------+
 #include <Object.mqh>
-#include "..\DELib.mqh"
+#include "..\Services\DELib.mqh"
 //+------------------------------------------------------------------+
 //| Abstract order class                                             |
 //+------------------------------------------------------------------+
@@ -593,7 +593,7 @@ bool COrder::OrderCloseByStopLoss(void) const
 #endif 
   }
 //+------------------------------------------------------------------+
-//| Return the flag of closing position by TakeProfit                |
+//| Return the flag of closing a position by TakeProfit              |
 //+------------------------------------------------------------------+
 bool COrder::OrderCloseByTakeProfit(void) const
   {
@@ -1013,7 +1013,7 @@ string COrder::GetReasonDescription(const long reason) const
            (
             reason==ORDER_REASON_CLIENT      ?  TextByLanguage("Ордер выставлен из десктопного терминала","Order set from desktop terminal") :
             reason==ORDER_REASON_MOBILE      ?  TextByLanguage("Ордер выставлен из мобильного приложения","Order set from mobile app") :
-            reason==ORDER_REASON_WEB         ?  TextByLanguage("Ордер выставлен из веб-платформы","Oder set from web platform") :
+            reason==ORDER_REASON_WEB         ?  TextByLanguage("Ордер выставлен из веб-платформы","Order set from web platform") :
             reason==ORDER_REASON_EXPERT      ?  TextByLanguage("Ордер выставлен советником или скриптом","Order set from EA or script") :
             reason==ORDER_REASON_SL          ?  TextByLanguage("Срабатывание StopLoss","Due to StopLoss") :
             reason==ORDER_REASON_TP          ?  TextByLanguage("Срабатывание TakeProfit","Due to TakeProfit") :
@@ -1059,7 +1059,7 @@ string COrder::GetEntryDescription(const long deal_entry) const
          res=TextByLanguage("Свойство не поддерживается у отложенного ордера","Property not supported for pending order"); 
          break;
       case ORDER_STATUS_HISTORY_ORDER     : 
-         res=TextByLanguage("Свойство не поддерживается у исторического ордера","Property not supported for history order"); 
+         res=TextByLanguage("Свойство не поддерживается у исторического ордера","Property not supported for historical order"); 
          break;
       case ORDER_STATUS_DEAL              : 
          res=
@@ -1094,7 +1094,7 @@ string COrder::GetTypeDealDescription(const long deal_type) const
          res=TextByLanguage("Свойство не поддерживается у отложенного ордера","Property not supported for pending order"); 
          break;
       case ORDER_STATUS_HISTORY_ORDER     : 
-         res=TextByLanguage("Свойство не поддерживается у исторического ордера","Property not supported for history order"); 
+         res=TextByLanguage("Свойство не поддерживается у исторического ордера","Property not supported for historical order"); 
          break;
       case ORDER_STATUS_DEAL              : 
          res=

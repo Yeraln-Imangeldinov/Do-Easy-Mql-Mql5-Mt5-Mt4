@@ -1,2 +1,6 @@
 *.mqh		text working-tree-encoding=UTF-16LE eol=CRLF
 *.mqh		text working-tree-encoding=UTF-16LE-BOM eol=CRLF
+*.mq5		text working-tree-encoding=UTF-16LE eol=CRLF
+*.mq5		text working-tree-encoding=UTF-16LE-BOM eol=CRLF
+*.mq4		text working-tree-encoding=UTF-16LE eol=CRLF
+*.mq4		text working-tree-encoding=UTF-16LE-BOM eol=CRLF

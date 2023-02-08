@@ -11,6 +11,36 @@
 #define COUNTRY_LANG             ("Russian")                // Country language
 #define DFUN                     (__FUNCTION__+": ")        // "Function description"
 #define END_TIME                 (D'31.12.3000 23:59:59')   // End date for account history data requests
+#define TIMER_FREQUENCY          (16)                       // Minimal frequency of the library timer in milliseconds
+#define COLLECTION_PAUSE         (250)                      // Orders and deals collection timer pause in milliseconds
+#define COLLECTION_COUNTER_STEP  (16)                       // Increment of the orders and deals collection timer counter
+#define COLLECTION_COUNTER_ID    (1)                        // Orders and deals collection timer counter ID
+//+------------------------------------------------------------------+
+//| Search                                                           |
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| Search and sorting data                                          |
+//+------------------------------------------------------------------+
+enum ENUM_COMPARER_TYPE
+  {
+   EQUAL,                                                   // Equal
+   MORE,                                                    // More
+   LESS,                                                    // Less
+   NO_EQUAL,                                                // Not equal
+   EQUAL_OR_MORE,                                           // Equal or more
+   EQUAL_OR_LESS                                            // Equal or less
+  };
+//+------------------------------------------------------------------+
+//| Possible options of selecting by time                            |
+//+------------------------------------------------------------------+
+enum ENUM_SELECT_BY_TIME
+  {
+   SELECT_BY_TIME_OPEN,                                     // By open time
+   SELECT_BY_TIME_CLOSE,                                    // By close time
+   SELECT_BY_TIME_OPEN_MSC,                                 // By open time in milliseconds
+   SELECT_BY_TIME_CLOSE_MSC,                                // By close time in milliseconds
+  };
+//+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| Data for working with orders                                     |
 //+------------------------------------------------------------------+
