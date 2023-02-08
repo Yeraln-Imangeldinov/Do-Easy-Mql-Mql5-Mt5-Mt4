@@ -1440,10 +1440,10 @@ double CEventsCollection::SummaryVolumeDealsInByPosID(CArrayObj *list,const ulon
      }
    return vol;
   }
-//+---------------------------------------------------------------------+
-//| Return the total volume of all deals of OUT position by its         |
-//| ID (participation in closing by an opposite position is considered) |
-//+---------------------------------------------------------------------+
+//+--------------------------------------------------------------------+
+//| Return the total volume of all deals of OUT position by its        |
+//| ID (participation in closing by an opposite position is considered)|
+//+--------------------------------------------------------------------+
 double CEventsCollection::SummaryVolumeDealsOutByPosID(CArrayObj *list,const ulong position_id)
   {
    double vol=0.0;
