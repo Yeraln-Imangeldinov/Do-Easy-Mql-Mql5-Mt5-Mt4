@@ -19,12 +19,12 @@ public:
    //--- Constructor
                      CHistoryDeal(const ulong ticket) : COrder(ORDER_STATUS_DEAL,ticket) {}
    //--- Supported deal properties (1) real, (2) integer
-   virtual bool      SupportProperty(ENUM_ORDER_PROP_DOUBLE property);
    virtual bool      SupportProperty(ENUM_ORDER_PROP_INTEGER property);
+   virtual bool      SupportProperty(ENUM_ORDER_PROP_DOUBLE property);
   };
 //+------------------------------------------------------------------+
-//| Return 'true' if an order supports a passed property,            |
-//| otherwise return 'false'                                         |
+//| Return 'true' if an order supports a passed                      |
+//| integer property, otherwise return 'false'                       |
 //+------------------------------------------------------------------+
 bool CHistoryDeal::SupportProperty(ENUM_ORDER_PROP_INTEGER property)
   {
@@ -43,6 +43,7 @@ bool CHistoryDeal::SupportProperty(ENUM_ORDER_PROP_INTEGER property)
        (
         property==ORDER_PROP_POSITION_ID     ||
         property==ORDER_PROP_DEAL_ORDER      ||
+        property==ORDER_PROP_DEAL_ENTRY      ||
         property==ORDER_PROP_MAGIC           ||
         property==ORDER_PROP_CLOSE_BY_SL     ||
         property==ORDER_PROP_CLOSE_BY_TP
@@ -51,6 +52,9 @@ bool CHistoryDeal::SupportProperty(ENUM_ORDER_PROP_INTEGER property)
      ) return false;
    return true;
   }
+//+------------------------------------------------------------------+
+//| Return 'true' if an order supports a passed                      |
+//| real property, otherwise return 'false'                          |
 //+------------------------------------------------------------------+
 bool CHistoryDeal::SupportProperty(ENUM_ORDER_PROP_DOUBLE property)
   {

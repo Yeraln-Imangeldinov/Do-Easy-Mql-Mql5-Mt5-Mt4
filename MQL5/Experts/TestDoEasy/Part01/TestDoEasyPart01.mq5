@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                             TestDoEasyPart04.mq5 |
+//|                                             TestDoEasyPart05.mq5 |
 //|                        Copyright 2018, MetaQuotes Software Corp. |
 //|                             https://mql5.com/en/users/artmedia70 |
 //+------------------------------------------------------------------+
@@ -26,10 +26,11 @@ enum ENUM_BUTTONS
    BUTT_CLOSE_SELL,
    BUTT_CLOSE_SELL2,
    BUTT_CLOSE_SELL_BY_BUY,
+   BUTT_DELETE_PENDING,
    BUTT_CLOSE_ALL,
    BUTT_PROFIT_WITHDRAWAL
   };
-#define TOTAL_BUTT   (16)
+#define TOTAL_BUTT   (17)
 //--- structures
 struct SDataButt
   {
@@ -45,6 +46,8 @@ input uint     InpDistance    =  50;   // Pending orders distance (points)
 input uint     InpDistanceSL  =  50;   // StopLimit orders distance (points)
 input uint     InpSlippage    =  0;    // Slippage in points
 input double   InpWithdrawal  =  10;   // Withdrawal funds (in tester)
+input uint     InpButtShiftX  =  40;   // Buttons X shift 
+input uint     InpButtShiftY  =  10;   // Buttons Y shift 
 //--- global variables
 CEngine        engine;
 CTrade         trade;
@@ -84,7 +87,7 @@ int OnInit()
    distance_stoplimit=InpDistanceSL;
    slippage=InpSlippage;
 //--- create buttons
-   if(!CreateButtons())
+   if(!CreateButtons(InpButtShiftX,InpButtShiftY))
       return INIT_FAILED;
 //--- setting trade parameters
    trade.SetDeviationInPoints(slippage);
@@ -102,6 +105,7 @@ void OnDeinit(const int reason)
   {
 //--- delete objects
    ObjectsDeleteAll(0,prefix);
+   Comment("");
   }
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
@@ -111,14 +115,16 @@ void OnTick()
 //---
    static ENUM_TRADE_EVENT last_event=WRONG_VALUE;
    if(MQLInfoInteger(MQL_TESTER))
-      engine.OnTimer();
-   int total=ObjectsTotal(0);
-   for(int i=0;i<total;i++)
      {
-      string obj_name=ObjectName(0,i);
-      if(StringFind(obj_name,prefix+"BUTT_")<0)
-         continue;
-      PressButtonEvents(obj_name);
+      engine.OnTimer();
+      int total=ObjectsTotal(0);
+      for(int i=0;i<total;i++)
+        {
+         string obj_name=ObjectName(0,i);
+         if(StringFind(obj_name,prefix+"BUTT_")<0)
+            continue;
+         PressButtonEvents(obj_name);
+        }
      }
    if(engine.LastTradeEvent()!=last_event)
      {
@@ -147,23 +153,28 @@ void OnChartEvent(const int id,
    if(id==CHARTEVENT_OBJECT_CLICK && StringFind(sparam,"BUTT_")>0)
      {
       PressButtonEvents(sparam);
-     }  
+     }
+   if(id>=CHARTEVENT_CUSTOM)
+     {
+      ushort event=ushort(id-CHARTEVENT_CUSTOM);
+      Print(DFUN,"id=",id,", event=",EnumToString((ENUM_TRADE_EVENT)event),", lparam=",lparam,", dparam=",DoubleToString(dparam,Digits()),", sparam=",sparam);
+     } 
   }
 //+------------------------------------------------------------------+
 //| Create the buttons panel                                         |
 //+------------------------------------------------------------------+
-bool CreateButtons(void)
+bool CreateButtons(const int shift_x=30,const int shift_y=0)
   {
-   int h=18,w=84,offset=10;
-   int cx=offset,cy=offset+(h+1)*(TOTAL_BUTT/2)+h+1;
+   int h=18,w=84,offset=2;
+   int cx=offset+shift_x,cy=offset+shift_y+(h+1)*(TOTAL_BUTT/2)+2*h+1;
    int x=cx,y=cy;
    int shift=0;
    for(int i=0;i<TOTAL_BUTT;i++)
      {
       x=x+(i==7 ? w+2 : 0);
-      if(i==TOTAL_BUTT-2) x=cx;
+      if(i==TOTAL_BUTT-3) x=cx;
       y=(cy-(i-(i>6 ? 7 : 0))*(h+1));
-      if(!ButtonCreate(butt_data[i].name,x,y,(i<TOTAL_BUTT-2 ? w : w*2+2),h,butt_data[i].text,(i<4 ? clrGreen : i>6 && i<11 ? clrRed : clrBlue)))
+      if(!ButtonCreate(butt_data[i].name,x,y,(i<TOTAL_BUTT-3 ? w : w*2+2),h,butt_data[i].text,(i<4 ? clrGreen : i>6 && i<11 ? clrRed : clrBlue)))
         {
          Alert(TextByLanguage("Не удалось создать кнопку \"","Could not create button \""),butt_data[i].text);
          return false;
@@ -231,6 +242,7 @@ string EnumToButtText(const ENUM_BUTTONS member)
    StringReplace(txt,"2"," 1/2");
    StringReplace(txt,"_by_"," by ");
    StringReplace(txt,"profit_","Profit ");
+   StringReplace(txt,"delete_","Delete ");
    return txt;
   }
 //+------------------------------------------------------------------+
@@ -369,7 +381,7 @@ void PressButtonEvents(const string button_name)
             if(position!=NULL)
               {
                //--- Calculate the closed volume and close the half of the Buy position by the ticket
-               trade.PositionClosePartial(position.Ticket(),NormalizeLot(position.Symbol(),position.VolumeCurrent()/2.0));
+               trade.PositionClosePartial(position.Ticket(),NormalizeLot(position.Symbol(),position.Volume()/2.0));
               }
            }
         }
@@ -443,7 +455,7 @@ void PressButtonEvents(const string button_name)
             if(position!=NULL)
               {
                //--- Calculate the closed volume and close the half of the Sell position by the ticket
-               trade.PositionClosePartial(position.Ticket(),NormalizeLot(position.Symbol(),position.VolumeCurrent()/2.0));
+               trade.PositionClosePartial(position.Ticket(),NormalizeLot(position.Symbol(),position.Volume()/2.0));
               }
            }
         }
@@ -497,6 +509,27 @@ void PressButtonEvents(const string button_name)
                   continue;
                //--- close each position by its ticket
                trade.PositionClose(position.Ticket());
+              }
+           }
+        }
+      //--- If the BUTT_DELETE_PENDING button is pressed: Remove the first pending order
+      else if(button==EnumToString(BUTT_DELETE_PENDING))
+        {
+         //--- Get the list of all orders
+         CArrayObj* list=engine.GetListMarketPendings();
+         if(list!=NULL)
+           {
+            //--- Sort the list by placement time
+            list.Sort(SORT_BY_ORDER_TIME_OPEN_MSC);
+            int total=list.Total();
+            //--- In the loop from the position with the most amount of time
+            for(int i=total-1;i>=0;i--)
+              {
+               COrder* order=list.At(i);
+               if(order==NULL)
+                  continue;
+               //--- delete the order by its ticket
+               trade.OrderDelete(order.Ticket());
               }
            }
         }

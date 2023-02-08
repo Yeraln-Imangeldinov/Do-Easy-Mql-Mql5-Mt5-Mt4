@@ -9,24 +9,30 @@
 //+------------------------------------------------------------------+
 //| Include files                                                    |
 //+------------------------------------------------------------------+
-#include <Arrays\ArrayObj.mqh>
-#include "Select.mqh"
-#include "..\Objects\HistoryOrder.mqh"
-#include "..\Objects\HistoryPending.mqh"
-#include "..\Objects\HistoryDeal.mqh"
+#include "ListObj.mqh"
+#include "..\Services\Select.mqh"
+#include "..\Objects\Orders\HistoryOrder.mqh"
+#include "..\Objects\Orders\HistoryPending.mqh"
+#include "..\Objects\Orders\HistoryDeal.mqh"
 //+------------------------------------------------------------------+
 //| Collection of historical orders and deals                        |
 //+------------------------------------------------------------------+
-class CHistoryCollection
+class CHistoryCollection : public CListObj
   {
 private:
-   CArrayObj         m_list_all_orders;      // List of all historical orders and deals
+   CListObj          m_list_all_orders;      // List of all historical orders and deals
    COrder            m_order_instance;       // Order object for searching by property
    bool              m_is_trade_event;       // Trading event flag
    int               m_index_order;          // Index of the last order added to the collection from the terminal history list (MQL4, MQL5)
    int               m_index_deal;           // Index of the last deal added to the collection from the terminal history list (MQL5)
    int               m_delta_order;          // Difference in the number of orders compared to the previous check
    int               m_delta_deal;           // Difference in the number of deals compared to the previous check
+//--- Return the flag of the order object by its type and ticket in the list of historical orders and deals
+   bool              IsPresentOrderInList(const ulong order_ticket,const ENUM_ORDER_TYPE type);
+//--- Return the "lost" order type and ticket
+   ulong             OrderSearch(const int start,ENUM_ORDER_TYPE &order_type);
+//--- Create the order object and place it to the list
+   bool              CreateNewOrder(const ulong order_ticket,const ENUM_ORDER_TYPE order_type);
 public:
    //--- Select orders from the collection with time from begin_time to end_time
    CArrayObj        *GetListByTime(const datetime begin_time=0,const datetime end_time=0,
@@ -53,6 +59,7 @@ CHistoryCollection::CHistoryCollection(void) : m_index_deal(0),m_delta_deal(0),m
   {
    this.m_list_all_orders.Sort(#ifdef __MQL5__ SORT_BY_ORDER_TIME_OPEN #else SORT_BY_ORDER_TIME_CLOSE #endif );
    this.m_list_all_orders.Clear();
+   this.m_list_all_orders.Type(COLLECTION_HISTORY_ID);
   }
 //+------------------------------------------------------------------+
 //| Update the list of orders and deals                              |
@@ -72,7 +79,7 @@ void CHistoryCollection::Refresh(void)
          if(order==NULL) continue;
          if(!this.m_list_all_orders.InsertSort(order))
            {
-            ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Failed to add order to list"));
+            ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Could not add order to list"));
             delete order;
            }
         }
@@ -81,9 +88,9 @@ void CHistoryCollection::Refresh(void)
          //--- Removed pending orders
          CHistoryPending *order=new CHistoryPending(::OrderTicket());
          if(order==NULL) continue;
-         if(!this.m_list_all_orders.InsertSort(order))
+         if(!this.m_list_all_orders.InsertSort(order))this.m_list_all_orders.Type()
            {
-            ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Failed to add order to list"));
+            ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Could not add order to list"));
             delete order;
            }
         }
@@ -105,22 +112,36 @@ void CHistoryCollection::Refresh(void)
       ENUM_ORDER_TYPE type=(ENUM_ORDER_TYPE)::HistoryOrderGetInteger(order_ticket,ORDER_TYPE);
       if(type==ORDER_TYPE_BUY || type==ORDER_TYPE_SELL || type==ORDER_TYPE_CLOSE_BY)
         {
-         CHistoryOrder *order=new CHistoryOrder(order_ticket);
-         if(order==NULL) continue;
-         if(!this.m_list_all_orders.InsertSort(order))
+         //--- If there is no order of this type and with this ticket in the list, create an order object and add it to the list
+         if(!this.IsPresentOrderInList(order_ticket,type))
            {
-            ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Failed to add order to list"));
-            delete order;
+            if(!this.CreateNewOrder(order_ticket,type))
+               ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Could not add order to list"));
+           }
+         //--- Such an order is already present in the list, which means the necessary order is not the last one in the history list. Let's find it
+         else
+           {
+            ENUM_ORDER_TYPE type_lost=WRONG_VALUE;
+            ulong ticket_lost=this.OrderSearch(i,type_lost);
+            if(ticket_lost>0 && !this.CreateNewOrder(ticket_lost,type_lost))
+               ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Could not add order to list"));
            }
         }
       else
         {
-         CHistoryPending *order=new CHistoryPending(order_ticket);
-         if(order==NULL) continue;
-         if(!this.m_list_all_orders.InsertSort(order))
+         //--- If there is no pending order of this type and with this ticket in the list, create an order object and add it to the list
+         if(!this.IsPresentOrderInList(order_ticket,type))
            {
-            ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Failed to add order to list"));
-            delete order;
+            if(!this.CreateNewOrder(order_ticket,type))
+               ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Could not add order to list"));
+           }
+         //--- Such an order is already present in the list, which means the necessary order is not the last one in the history list. Let's find it
+         else
+           {
+            ENUM_ORDER_TYPE type_lost=WRONG_VALUE;
+            ulong ticket_lost=this.OrderSearch(i,type_lost);
+            if(ticket_lost>0 && !this.CreateNewOrder(ticket_lost,type_lost))
+               ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Could not add order to list"));
            }
         }
      }
@@ -137,7 +158,11 @@ void CHistoryCollection::Refresh(void)
       if(deal_ticket==0) continue;
       CHistoryDeal *deal=new CHistoryDeal(deal_ticket);
       if(deal==NULL) continue;
-      this.m_list_all_orders.InsertSort(deal);
+      if(!this.m_list_all_orders.InsertSort(deal))
+        {
+         ::Print(DFUN,TextByLanguage("Не удалось добавить сделку в список","Could not add deal to list"));
+         delete deal;
+        }
      }
 //--- save the index of the last added deal and the difference with the last check
    int delta_deal=j-this.m_index_deal;
@@ -173,16 +198,116 @@ CArrayObj *CHistoryCollection::GetListByTime(const datetime begin_time=0,const d
    list.FreeMode(false);
    ListStorage.Add(list);
    //---
-   m_order_instance.SetProperty(property,begin);
+   this.m_order_instance.SetProperty(property,begin);
    int index_begin=this.m_list_all_orders.SearchGreatOrEqual(&m_order_instance);
    if(index_begin==WRONG_VALUE)
       return list;
-   m_order_instance.SetProperty(property,end);
+   this.m_order_instance.SetProperty(property,end);
    int index_end=this.m_list_all_orders.SearchLessOrEqual(&m_order_instance);
    if(index_end==WRONG_VALUE)
       return list;
    for(int i=index_begin; i<=index_end; i++)
       list.Add(this.m_list_all_orders.At(i));
    return list;
+  }
+//+-----------------------------------------------------------------------------+
+//| Return the flag of the order object presence in the list by type and ticket |
+//+-----------------------------------------------------------------------------+
+bool CHistoryCollection::IsPresentOrderInList(const ulong order_ticket,const ENUM_ORDER_TYPE type)
+  {
+   CArrayObj* list=dynamic_cast<CListObj*>(&this.m_list_all_orders);
+   list=CSelect::ByOrderProperty(list,ORDER_PROP_TYPE,type,EQUAL);
+   list=CSelect::ByOrderProperty(list,ORDER_PROP_TICKET,order_ticket,EQUAL);
+   return(list.Total()>0);
+  }
+//+------------------------------------------------------------------+
+//| Return the "lost" order type and ticket                          |
+//+------------------------------------------------------------------+
+ulong CHistoryCollection::OrderSearch(const int start,ENUM_ORDER_TYPE &order_type)
+  {
+   ulong order_ticket=0;
+   for(int i=start-1;i>=0;i--)
+     {
+      ulong ticket=::HistoryOrderGetTicket(i);
+      if(ticket==0)
+         continue;
+      ENUM_ORDER_TYPE type=(ENUM_ORDER_TYPE)::HistoryOrderGetInteger(ticket,ORDER_TYPE);
+      if(this.IsPresentOrderInList(ticket,type))
+         continue;
+      order_ticket=ticket;
+      order_type=type;
+     }
+   return order_ticket;
+  }
+//+------------------------------------------------------------------+
+//| Create the order object and place it to the list                 |
+//+------------------------------------------------------------------+
+bool CHistoryCollection::CreateNewOrder(const ulong order_ticket,const ENUM_ORDER_TYPE order_type)
+  {
+   COrder* order=NULL;
+   if(order_type==ORDER_TYPE_BUY)
+     {
+      order=new CHistoryOrder(order_ticket);
+      if(order==NULL)
+         return false;
+     }
+   else if(order_type==ORDER_TYPE_BUY_LIMIT)
+     {
+      order=new CHistoryPending(order_ticket);
+      if(order==NULL)
+         return false;
+     }
+   else if(order_type==ORDER_TYPE_BUY_STOP)
+     {
+      order=new CHistoryPending(order_ticket);
+      if(order==NULL)
+         return false;
+     }
+   else if(order_type==ORDER_TYPE_SELL)
+     {
+      order=new CHistoryOrder(order_ticket);
+      if(order==NULL)
+         return false;
+     }
+   else if(order_type==ORDER_TYPE_SELL_LIMIT)
+     {
+      order=new CHistoryPending(order_ticket);
+      if(order==NULL)
+         return false;
+     }
+   else if(order_type==ORDER_TYPE_SELL_STOP)
+     {
+      order=new CHistoryPending(order_ticket);
+      if(order==NULL)
+         return false;
+     }
+#ifdef __MQL5__
+   else if(order_type==ORDER_TYPE_BUY_STOP_LIMIT)
+     {
+      order=new CHistoryPending(order_ticket);
+      if(order==NULL)
+         return false;
+     }
+   else if(order_type==ORDER_TYPE_SELL_STOP_LIMIT)
+     {
+      order=new CHistoryPending(order_ticket);
+      if(order==NULL)
+         return false;
+     }
+   else if(order_type==ORDER_TYPE_CLOSE_BY)
+     {
+      order=new CHistoryOrder(order_ticket);
+      if(order==NULL)
+         return false;
+     }
+#endif 
+   if(this.m_list_all_orders.InsertSort(order))
+      return true;
+   else
+     {
+      delete order;
+      return false;
+     }
+   return false;
   }
 //+------------------------------------------------------------------+

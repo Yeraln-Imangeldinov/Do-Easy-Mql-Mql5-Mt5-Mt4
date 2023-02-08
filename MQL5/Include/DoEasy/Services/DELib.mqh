@@ -29,7 +29,7 @@ string TimeMSCtoString(const long time_msc)
    return TimeToString(time_msc/1000,TIME_DATE|TIME_MINUTES|TIME_SECONDS)+"."+IntegerToString(time_msc%1000,3,'0');
   }
 //+------------------------------------------------------------------+
-//| Return the number of decimal places in a symbol lot              |
+//| Returns the number of decimal places in a symbol lot             |
 //+------------------------------------------------------------------+
 uint DigitsLots(const string symbol_name) 
   { 
@@ -162,7 +162,7 @@ double CorrectPricePending(const string symbol_name,const ENUM_ORDER_TYPE order_
       case ORDER_TYPE_SELL_LIMIT       :  pp=(price==0 ? SymbolInfoDouble(symbol_name,SYMBOL_BID) : price); return NormalizeDouble(fmax(pp+lv*pt,price_set),dg);
       case ORDER_TYPE_SELL_STOP        :  
       case ORDER_TYPE_SELL_STOP_LIMIT  :  pp=(price==0 ? SymbolInfoDouble(symbol_name,SYMBOL_BID) : price); return NormalizeDouble(fmin(pp-lv*pt,price_set),dg);
-      default                          :  Print(DFUN,TextByLanguage("Неправильный тип ордера: ","Invalid order type: "),EnumToString(order_type)); return 0;
+      default                          :  Print(DFUN,TextByLanguage("Не правильный тип ордера: ","Invalid order type: "),EnumToString(order_type)); return 0;
      }
   }
 //+------------------------------------------------------------------+
@@ -200,4 +200,92 @@ int StopLevel(const string symbol_name,const int spread_multiplier)
    int stop_level=(int)SymbolInfoInteger(symbol_name,SYMBOL_TRADE_STOPS_LEVEL);
    return(stop_level==0 ? spread*spread_multiplier : stop_level);
   }
-//+------------------------------------------------------------------+ 
+//+------------------------------------------------------------------+
+//| Return the order name                                            |
+//+------------------------------------------------------------------+
+string OrderTypeDescription(const ENUM_ORDER_TYPE type)
+  {
+   string pref=(#ifdef __MQL5__ "Market order" #else "Position" #endif );
+   return
+     (
+      type==ORDER_TYPE_BUY_LIMIT       ?  "Buy Limit"                                                 :
+      type==ORDER_TYPE_BUY_STOP        ?  "Buy Stop"                                                  :
+      type==ORDER_TYPE_SELL_LIMIT      ?  "Sell Limit"                                                :
+      type==ORDER_TYPE_SELL_STOP       ?  "Sell Stop"                                                 :
+   #ifdef __MQL5__
+      type==ORDER_TYPE_BUY_STOP_LIMIT  ?  "Buy Stop Limit"                                            :
+      type==ORDER_TYPE_SELL_STOP_LIMIT ?  "Sell Stop Limit"                                           :
+      type==ORDER_TYPE_CLOSE_BY        ?  TextByLanguage("Закрывающий ордер","Order for closing by")  :  
+   #else 
+      type==ORDER_TYPE_BALANCE         ?  TextByLanguage("Балансовая операция","Balance operation")   :
+      type==ORDER_TYPE_CREDIT          ?  TextByLanguage("Кредитная операция","Credit operation")     :
+   #endif 
+      type==ORDER_TYPE_BUY             ?  pref+" Buy"                                                 :
+      type==ORDER_TYPE_SELL            ?  pref+" Sell"                                                :  
+      TextByLanguage("Неизвестный тип ордера","Unknown order type")
+     );
+  }
+//+------------------------------------------------------------------+
+//| Return the position name                                         |
+//+------------------------------------------------------------------+
+string PositionTypeDescription(const ENUM_POSITION_TYPE type)
+  {
+   return
+     (
+      type==POSITION_TYPE_BUY    ? "Buy"  :
+      type==POSITION_TYPE_SELL   ? "Sell" :  
+      TextByLanguage("Неизвестный тип позиции","Unknown position type")
+     );
+  }
+//+------------------------------------------------------------------+
+//| Return the deal name                                             |
+//+------------------------------------------------------------------+
+string DealTypeDescription(const ENUM_DEAL_TYPE type)
+  {
+   return
+     (
+      type==DEAL_TYPE_BUY                       ?  TextByLanguage("Сделка на покупку","Buy deal") :
+      type==DEAL_TYPE_SELL                      ?  TextByLanguage("Сделка на продажу","Sell deal") :
+      type==DEAL_TYPE_BALANCE                   ?  TextByLanguage("Балансовая операция","Balance operation") :
+      type==DEAL_TYPE_CREDIT                    ?  TextByLanguage("Начисление кредита","Credit") :
+      type==DEAL_TYPE_CHARGE                    ?  TextByLanguage("Дополнительные сборы","Additional charge") :
+      type==DEAL_TYPE_CORRECTION                ?  TextByLanguage("Корректирующая запись","Correction") :
+      type==DEAL_TYPE_BONUS                     ?  TextByLanguage("Перечисление бонусов","Bonus") :
+      type==DEAL_TYPE_COMMISSION                ?  TextByLanguage("Дополнительные комиссии","Additional comissions") :
+      type==DEAL_TYPE_COMMISSION_DAILY          ?  TextByLanguage("Комиссия, начисляемая в конце торгового дня","Daily commission") :
+      type==DEAL_TYPE_COMMISSION_MONTHLY        ?  TextByLanguage("Комиссия, начисляемая в конце месяца","Monthly commission") :
+      type==DEAL_TYPE_COMMISSION_AGENT_DAILY    ?  TextByLanguage("Агентская комиссия, начисляемая в конце торгового дня","Daily agent commission") :
+      type==DEAL_TYPE_COMMISSION_AGENT_MONTHLY  ?  TextByLanguage("Агентская комиссия, начисляемая в конце месяца","Monthly agent commission") :
+      type==DEAL_TYPE_INTEREST                  ?  TextByLanguage("Начисления процентов на свободные средства","Accrued interest on free funds") :
+      type==DEAL_TYPE_BUY_CANCELED              ?  TextByLanguage("Отмененная сделка покупки","Canceled buy transaction") :
+      type==DEAL_TYPE_SELL_CANCELED             ?  TextByLanguage("Отмененная сделка продажи","Canceled sell transaction") :
+      type==DEAL_DIVIDEND                       ?  TextByLanguage("Начисление дивиденда","Dividend operations") :
+      type==DEAL_DIVIDEND_FRANKED               ?  TextByLanguage("Начисление франкированного дивиденда","Franked (non-taxable) dividend operations") :
+      type==DEAL_TAX                            ?  TextByLanguage("Начисление налога","Tax charges") : 
+      TextByLanguage("Неизвестный тип сделки","Unknown deal type")
+     );
+  }
+//+------------------------------------------------------------------+
+//| Return position type by order type                               |
+//+------------------------------------------------------------------+
+ENUM_POSITION_TYPE PositionTypeByOrderType(ENUM_ORDER_TYPE type_order)
+  {
+   if(
+      type_order==ORDER_TYPE_BUY             ||
+      type_order==ORDER_TYPE_BUY_LIMIT       ||
+      type_order==ORDER_TYPE_BUY_STOP
+   #ifdef __MQL5__                           ||
+      type_order==ORDER_TYPE_BUY_STOP_LIMIT
+   #endif 
+     ) return POSITION_TYPE_BUY;
+   else if(
+      type_order==ORDER_TYPE_SELL            ||
+      type_order==ORDER_TYPE_SELL_LIMIT      ||
+      type_order==ORDER_TYPE_SELL_STOP
+   #ifdef __MQL5__                           ||
+      type_order==ORDER_TYPE_SELL_STOP_LIMIT
+   #endif 
+     ) return POSITION_TYPE_SELL;
+   return WRONG_VALUE;
+  }
+//+------------------------------------------------------------------+

@@ -11,7 +11,7 @@
 //| Include files                                                    |
 //+------------------------------------------------------------------+
 #include <Object.mqh>
-#include "..\Services\DELib.mqh"
+#include "..\..\Services\DELib.mqh"
 //+------------------------------------------------------------------+
 //| Abstract order class                                             |
 //+------------------------------------------------------------------+
@@ -23,9 +23,8 @@ private:
    double            m_double_prop[ORDER_PROP_DOUBLE_TOTAL];      // Real properties
    string            m_string_prop[ORDER_PROP_STRING_TOTAL];      // String properties
 
-   //--- Return the array index the double property is actually located at
+   //--- Return the index of the array the order's (1) double and (2) string properties are located at
    int               IndexProp(ENUM_ORDER_PROP_DOUBLE property) const { return(int)property-ORDER_PROP_INTEGER_TOTAL;                        }
-   //--- Return the array index the string property is actually located at
    int               IndexProp(ENUM_ORDER_PROP_STRING property) const { return(int)property-ORDER_PROP_INTEGER_TOTAL-ORDER_PROP_DOUBLE_TOTAL;}
 public:
    //--- Default constructor
@@ -84,22 +83,23 @@ protected:
    
 public:
    //--- Set (1) integer, (2) real and (3) string order property
-   void              SetProperty(ENUM_ORDER_PROP_INTEGER property,long value) { m_long_prop[property]=value;                     }
-   void              SetProperty(ENUM_ORDER_PROP_DOUBLE property,long value)  { m_long_prop[property]=value;                     }
-   void              SetProperty(ENUM_ORDER_PROP_STRING property,long value)  { m_long_prop[property]=value;                     }
+   void              SetProperty(ENUM_ORDER_PROP_INTEGER property,long value) { this.m_long_prop[property]=value;                               }
+   void              SetProperty(ENUM_ORDER_PROP_DOUBLE property,double value){ this.m_double_prop[this.IndexProp(property)]=value;             }
+   void              SetProperty(ENUM_ORDER_PROP_STRING property,string value){ this.m_string_prop[this.IndexProp(property)]=value;             }
    //--- Return (1) integer, (2) real and (3) string order properties from the property array
-   long              GetProperty(ENUM_ORDER_PROP_INTEGER property)      const { return m_long_prop[property];                    }
-   double            GetProperty(ENUM_ORDER_PROP_DOUBLE property)       const { return m_double_prop[this.IndexProp(property)];  }
-   string            GetProperty(ENUM_ORDER_PROP_STRING property)       const { return m_string_prop[this.IndexProp(property)];  }
+   long              GetProperty(ENUM_ORDER_PROP_INTEGER property)      const { return this.m_long_prop[property];                              }
+   double            GetProperty(ENUM_ORDER_PROP_DOUBLE property)       const { return this.m_double_prop[this.IndexProp(property)];            }
+   string            GetProperty(ENUM_ORDER_PROP_STRING property)       const { return this.m_string_prop[this.IndexProp(property)];            }
 
    //--- Return the flag of the order supporting the property
    virtual bool      SupportProperty(ENUM_ORDER_PROP_INTEGER property)        { return true; }
    virtual bool      SupportProperty(ENUM_ORDER_PROP_DOUBLE property)         { return true; }
    virtual bool      SupportProperty(ENUM_ORDER_PROP_STRING property)         { return true; }
 
-   //--- Compare COrder objects by all possible properties
+   //--- Compare COrder objects by all possible properties (to sort the lists by a specified order object property)
    virtual int       Compare(const CObject *node,const int mode=0) const;
-
+//--- Compare COrder objects by all properties (to search for equal event objects)
+   bool              IsEqual(COrder* compared_order) const;
 //+------------------------------------------------------------------+
 //| Methods of a simplified access to the order object properties    |
 //+------------------------------------------------------------------+
@@ -121,7 +121,7 @@ public:
    datetime          TimeOpenMSC(void)                                  const { return (datetime)this.GetProperty(ORDER_PROP_TIME_OPEN_MSC);    }
    datetime          TimeCloseMSC(void)                                 const { return (datetime)this.GetProperty(ORDER_PROP_TIME_CLOSE_MSC);   }
    datetime          TimeExpiration(void)                               const { return (datetime)this.GetProperty(ORDER_PROP_TIME_EXP);         }
-   ENUM_ORDER_STATE  StateOrder(void)                                   const { return (ENUM_ORDER_STATE)this.GetProperty(ORDER_PROP_STATE);    }
+   ENUM_ORDER_STATE  State(void)                                        const { return (ENUM_ORDER_STATE)this.GetProperty(ORDER_PROP_STATE);    }
    ENUM_ORDER_STATUS Status(void)                                       const { return (ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS);  }
    ENUM_ORDER_TYPE   TypeByDirection(void)                              const { return (ENUM_ORDER_TYPE)this.GetProperty(ORDER_PROP_DIRECTION); }
    
@@ -254,7 +254,31 @@ int COrder::Compare(const CObject *node,const int mode=0) const
      }
    return 0;
   }
-  
+//+------------------------------------------------------------------+
+//| Compare COrder objects by all properties                         |
+//+------------------------------------------------------------------+
+bool COrder::IsEqual(COrder *compared_order) const
+  {
+   int beg=0, end=ORDER_PROP_INTEGER_TOTAL;
+   for(int i=beg; i<end; i++)
+     {
+      ENUM_ORDER_PROP_INTEGER prop=(ENUM_ORDER_PROP_INTEGER)i;
+      if(this.GetProperty(prop)!=compared_order.GetProperty(prop)) return false; 
+     }
+   beg=end; end+=ORDER_PROP_DOUBLE_TOTAL;
+   for(int i=beg; i<end; i++)
+     {
+      ENUM_ORDER_PROP_DOUBLE prop=(ENUM_ORDER_PROP_DOUBLE)i;
+      if(this.GetProperty(prop)!=compared_order.GetProperty(prop)) return false; 
+     }
+   beg=end; end+=ORDER_PROP_STRING_TOTAL;
+   for(int i=beg; i<end; i++)
+     {
+      ENUM_ORDER_PROP_STRING prop=(ENUM_ORDER_PROP_STRING)i;
+      if(this.GetProperty(prop)!=compared_order.GetProperty(prop)) return false; 
+     }
+   return true;
+  }
 //+------------------------------------------------------------------+
 //| Integer properties                                               |
 //+------------------------------------------------------------------+
@@ -463,7 +487,7 @@ long COrder::OrderTypeByDirection(void) const
      {
       return(this.OrderType()==POSITION_TYPE_BUY ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
      }
-   if(status==ORDER_STATUS_MARKET_PENDING || status==ORDER_STATUS_HISTORY_PENDING)
+   else if(status==ORDER_STATUS_MARKET_PENDING || status==ORDER_STATUS_HISTORY_PENDING)
      {
       return
         (
@@ -476,9 +500,17 @@ long COrder::OrderTypeByDirection(void) const
          ORDER_TYPE_SELL
         );
      }
-   if(status==ORDER_STATUS_MARKET_ORDER || status==ORDER_STATUS_HISTORY_ORDER)
+   else if(status==ORDER_STATUS_MARKET_ORDER || status==ORDER_STATUS_HISTORY_ORDER)
      {
       return this.OrderType();
+     }
+   else if(status==ORDER_STATUS_DEAL)
+     {
+      return
+        (
+         (ENUM_DEAL_TYPE)this.TypeOrder()==DEAL_TYPE_BUY ? ORDER_TYPE_BUY   :
+         (ENUM_DEAL_TYPE)this.TypeOrder()==DEAL_TYPE_SELL ? ORDER_TYPE_SELL : WRONG_VALUE
+        );
      }
    return WRONG_VALUE;
   }
@@ -1114,6 +1146,9 @@ string COrder::GetTypeDealDescription(const long deal_type) const
    string res="";
    switch(this.Status())
      {
+      case ORDER_STATUS_DEAL              : 
+         res=DealTypeDescription((ENUM_DEAL_TYPE)deal_type);
+         break;
       case ORDER_STATUS_MARKET_POSITION   : 
          res=TextByLanguage("Свойство не поддерживается у позиции","Property not supported for position"); 
          break;
@@ -1127,30 +1162,7 @@ string COrder::GetTypeDealDescription(const long deal_type) const
       case ORDER_STATUS_HISTORY_ORDER     : 
          res=TextByLanguage("Свойство не поддерживается у исторического маркет-ордера","Property not supported for historical market order"); 
          break;
-      case ORDER_STATUS_DEAL              : 
-         res=
-           (
-            deal_type==DEAL_TYPE_BUY                      ?  TextByLanguage("Сделка на покупку","Buy deal") :
-            deal_type==DEAL_TYPE_SELL                     ?  TextByLanguage("Сделка на продажу","Sell deal") :
-            deal_type==DEAL_TYPE_BALANCE                  ?  TextByLanguage("Начисление баланса","Balance accrual") :
-            deal_type==DEAL_TYPE_CREDIT                   ?  TextByLanguage("Начисление кредита","Credit accrual") :
-            deal_type==DEAL_TYPE_CHARGE                   ?  TextByLanguage("Дополнительные сборы","Extra charges") :
-            deal_type==DEAL_TYPE_CORRECTION               ?  TextByLanguage("Корректирующая запись","Corrective entry") :
-            deal_type==DEAL_TYPE_BONUS                    ?  TextByLanguage("Перечисление бонусов","Bonuses") :
-            deal_type==DEAL_TYPE_COMMISSION               ?  TextByLanguage("Дополнительные комиссии","Additional comissions") :
-            deal_type==DEAL_TYPE_COMMISSION_DAILY         ?  TextByLanguage("Комиссия, начисляемая в конце торгового дня","Commission accrued at the end of a trading day") :
-            deal_type==DEAL_TYPE_COMMISSION_MONTHLY       ?  TextByLanguage("Комиссия, начисляемая в конце месяца","Commission accrued at the end of a month") :
-            deal_type==DEAL_TYPE_COMMISSION_AGENT_DAILY   ?  TextByLanguage("Агентская комиссия, начисляемая в конце торгового дня","Agency commission charged at the end of a trading day") :
-            deal_type==DEAL_TYPE_COMMISSION_AGENT_MONTHLY ?  TextByLanguage("Агентская комиссия, начисляемая в конце месяца","Agency commission charged at the end of a month") :
-            deal_type==DEAL_TYPE_INTEREST                 ?  TextByLanguage("Начисления процентов на свободные средства","Accrued interest on free funds") :
-            deal_type==DEAL_TYPE_BUY_CANCELED             ?  TextByLanguage("Отмененная сделка покупки","Canceled buy transaction") :
-            deal_type==DEAL_TYPE_SELL_CANCELED            ?  TextByLanguage("Отмененная сделка продажи","Canceled sell transaction") :
-            deal_type==DEAL_DIVIDEND                      ?  TextByLanguage("Начисление дивиденда","Accrued dividends") :
-            deal_type==DEAL_DIVIDEND_FRANKED              ?  TextByLanguage("Начисление франкированного дивиденда","Accrual of franked dividend") :
-            deal_type==DEAL_TAX                           ?  TextByLanguage("Начисление налога","Tax accrual") : ""
-           );
-         break;
-      default                             : res=""; break;
+      default  : res=""; break;
      }
    return res;
 #endif 
@@ -1183,26 +1195,11 @@ string COrder::StatusDescription(void) const
 //+------------------------------------------------------------------+
 string COrder::TypeDescription(void) const
   {
-   if(this.Status()==ORDER_STATUS_DEAL)
-      return this.GetTypeDealDescription(this.TypeOrder());
-   else switch((int)this.TypeOrder())
-     {
-      case ORDER_TYPE_BUY              :  return "Buy";
-      case ORDER_TYPE_BUY_LIMIT        :  return "Buy Limit";
-      case ORDER_TYPE_BUY_STOP         :  return "Buy Stop";
-      case ORDER_TYPE_SELL             :  return "Sell";
-      case ORDER_TYPE_SELL_LIMIT       :  return "Sell Limit";
-      case ORDER_TYPE_SELL_STOP        :  return "Sell Stop";
-      #ifdef __MQL4__
-      case ORDER_TYPE_BALANCE          :  return TextByLanguage("Балансовая операция","Balance operation");
-      case ORDER_TYPE_CREDIT           :  return TextByLanguage("Кредитная операция","Credit operation");
-      #else 
-      case ORDER_TYPE_BUY_STOP_LIMIT   :  return "Buy Stop Limit";
-      case ORDER_TYPE_SELL_STOP_LIMIT  :  return "Sell Stop Limit";
-      case ORDER_TYPE_CLOSE_BY         :  return TextByLanguage("Закрывающий ордер","Order for closing by");
-      #endif 
-      default                          :  return TextByLanguage("Неизвестный тип","Unknown type");
-     }
+   return
+     (
+      this.Status()==ORDER_STATUS_DEAL ? this.GetTypeDealDescription(this.TypeOrder()) :
+      OrderTypeDescription((ENUM_ORDER_TYPE)this.TypeOrder())
+     );
   }
 //+------------------------------------------------------------------+
 //| Return an order state description                                |
@@ -1211,7 +1208,7 @@ string COrder::StateDescription(void) const
   {
    if(this.Status()==ORDER_STATUS_DEAL || this.Status()==ORDER_STATUS_MARKET_POSITION)
       return "";
-   else switch(this.StateOrder())
+   else switch(this.State())
      {
       case ORDER_STATE_STARTED         :  return TextByLanguage("Ордер проверен на корректность, но еще не принят брокером","Order verified but not yet accepted by broker");
       case ORDER_STATE_PLACED          :  return TextByLanguage("Ордер принят","Order accepted");
@@ -1239,7 +1236,17 @@ string COrder::DealEntryDescription(void) const
 string COrder::DirectionDescription(void) const
   {
    if(this.Status()==ORDER_STATUS_DEAL)
-      return this.TypeDescription();
+      return 
+        (
+         this.OrderType()==DEAL_TYPE_BALANCE ? 
+           (
+            this.OrderProfit()>0 ? TextByLanguage("Пополнение счёта","Account refilled") : 
+            TextByLanguage("Вывод средств","Withdrawals from account")
+           )                                          :
+         this.OrderType()==DEAL_TYPE_BUY     ? "Buy"  : 
+         this.OrderType()==DEAL_TYPE_SELL    ? "Sell" :
+         this.TypeDescription()
+        );
    switch(this.TypeByDirection())
      {
       case ORDER_TYPE_BUY  :  return "Buy";
@@ -1276,7 +1283,7 @@ void COrder::Print(const bool full_prop=false)
       if(!full_prop && !this.SupportProperty(prop)) continue;
       ::Print(this.GetPropertyDescription(prop));
      }
-   ::Print("================== ",TextByLanguage("Конец списка параметров: \"","End of the parameter list: \""),this.StatusDescription(),"\" ==================\n");
+   ::Print("================== ",TextByLanguage("Конец списка параметров: \"","End of parameter list: \""),this.StatusDescription(),"\" ==================\n");
   }
 //+------------------------------------------------------------------+
 //| Return description of an order's integer property                |
@@ -1340,11 +1347,11 @@ string COrder::GetPropertyDescription(ENUM_ORDER_PROP_INTEGER property)
          )  :
       property==ORDER_PROP_TIME_OPEN_MSC     ?  TextByLanguage("Время открытия в милисекундах","Open time in milliseconds")+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
-          ": "+(string)this.GetProperty(property)+" > "+TimeMSCtoString(this.GetProperty(property))
+          ": "+TimeMSCtoString(this.GetProperty(property))+" ("+(string)this.GetProperty(property)+")"
          )  :
       property==ORDER_PROP_TIME_CLOSE_MSC    ?  TextByLanguage("Время закрытия в милисекундах","Close time in milliseconds")+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
-          ": "+(string)this.GetProperty(property)+" > "+TimeMSCtoString(this.GetProperty(property))
+          ": "+TimeMSCtoString(this.GetProperty(property))+" ("+(string)this.GetProperty(property)+")"
          )  :
       property==ORDER_PROP_TIME_UPDATE       ?  TextByLanguage("Время изменения позиции","Position change time")+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
@@ -1352,7 +1359,7 @@ string COrder::GetPropertyDescription(ENUM_ORDER_PROP_INTEGER property)
          )  :
       property==ORDER_PROP_TIME_UPDATE_MSC   ?  TextByLanguage("Время изменения позиции в милисекундах","Position change time in milliseconds")+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
-          ": "+(this.GetProperty(property)!=0 ? (string)this.GetProperty(property)+" > "+TimeMSCtoString(this.GetProperty(property)) : "0")
+          ": "+(this.GetProperty(property)!=0 ? TimeMSCtoString(this.GetProperty(property))+" ("+(string)this.GetProperty(property)+")" : "0")
          )  :
       property==ORDER_PROP_STATE             ?  TextByLanguage("Состояние","Statе")+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
