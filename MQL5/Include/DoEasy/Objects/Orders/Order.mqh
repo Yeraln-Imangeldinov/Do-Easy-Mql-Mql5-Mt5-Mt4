@@ -48,7 +48,7 @@ protected:
    long              OrderTypeFilling(void)        const;
    long              OrderTypeTime(void)           const;
    long              OrderReason(void)             const;
-   long              DealOrder(void)               const;
+   long              DealOrderTicket(void)         const;
    long              DealEntry(void)               const;
    bool              OrderCloseByStopLoss(void)    const;
    bool              OrderCloseByTakeProfit(void)  const;
@@ -103,9 +103,10 @@ public:
 //+------------------------------------------------------------------+
 //| Methods of a simplified access to the order object properties    |
 //+------------------------------------------------------------------+
-   //--- Return (1) ticket, (2) parent order ticket, (3) derived order ticket, (4) magic number, (5) order reason (6) position ID
-   //--- (7) opposite position ID, (8) type, (9) flag of closing by StopLoss, (10) flag of closing by TakeProfit (11) open time, (12) close time,
-   //--- (13) open time in milliseconds, (14) close time in milliseconds (15) expiration date, (16) current state, (17) status, (18) direction
+   //--- Return (1) ticket, (2) parent order ticket, (3) derived order ticket, (4) magic number, (5) order reason,
+   //--- (6) position ID, (7) opposite position ID, (8) group ID, (9) type, (10) flag of closing by StopLoss,
+   //--- (11) flag of closing by TakeProfit (12) open time, (13) close time, (14) open time in milliseconds,
+   //--- (15) close time in milliseconds, (16) expiration date, (17) state, (18) status, (19) order type by direction
    long              Ticket(void)                                       const { return this.GetProperty(ORDER_PROP_TICKET);                     }
    long              TicketFrom(void)                                   const { return this.GetProperty(ORDER_PROP_TICKET_FROM);                }
    long              TicketTo(void)                                     const { return this.GetProperty(ORDER_PROP_TICKET_TO);                  }
@@ -113,6 +114,7 @@ public:
    long              Reason(void)                                       const { return this.GetProperty(ORDER_PROP_REASON);                     }
    long              PositionID(void)                                   const { return this.GetProperty(ORDER_PROP_POSITION_ID);                }
    long              PositionByID(void)                                 const { return this.GetProperty(ORDER_PROP_POSITION_BY_ID);             }
+   long              GroupID(void)                                      const { return this.GetProperty(ORDER_PROP_GROUP_ID);                   }
    long              TypeOrder(void)                                    const { return this.GetProperty(ORDER_PROP_TYPE);                       }
    bool              IsCloseByStopLoss(void)                            const { return (bool)this.GetProperty(ORDER_PROP_CLOSE_BY_SL);          }
    bool              IsCloseByTakeProfit(void)                          const { return (bool)this.GetProperty(ORDER_PROP_CLOSE_BY_TP);          }
@@ -126,7 +128,7 @@ public:
    ENUM_ORDER_TYPE   TypeByDirection(void)                              const { return (ENUM_ORDER_TYPE)this.GetProperty(ORDER_PROP_DIRECTION); }
    
    //--- Return (1) open price, (2) close price, (3) profit, (4) commission, (5) swap, (6) volume, 
-   //--- (7) unexecuted volume (8) StopLoss and (9) TakeProfit (10) StopLimit order price
+   //--- (7) unexecuted volume (8) StopLoss and (9) TakeProfit, (10) StopLimit order price
    double            PriceOpen(void)                                    const { return this.GetProperty(ORDER_PROP_PRICE_OPEN);                 }
    double            PriceClose(void)                                   const { return this.GetProperty(ORDER_PROP_PRICE_CLOSE);                }
    double            Profit(void)                                       const { return this.GetProperty(ORDER_PROP_PROFIT);                     }
@@ -147,6 +149,8 @@ public:
    double            ProfitFull(void)                                   const { return this.Profit()+this.Comission()+this.Swap();              }
    //--- Get order profit in points
    int               ProfitInPoints(void) const;
+//--- Set group ID
+   void              SetGroupID(long group_id)                                { this.SetProperty(ORDER_PROP_GROUP_ID,group_id);                 }
    
 //+------------------------------------------------------------------+
 //| Descriptions of the order object properties                      |
@@ -190,7 +194,7 @@ COrder::COrder(ENUM_ORDER_STATUS order_status,const ulong ticket)
    this.m_long_prop[ORDER_PROP_DIRECTION]                            = this.OrderTypeByDirection();
    this.m_long_prop[ORDER_PROP_POSITION_ID]                          = this.OrderPositionID();
    this.m_long_prop[ORDER_PROP_REASON]                               = this.OrderReason();
-   this.m_long_prop[ORDER_PROP_DEAL_ORDER]                           = this.DealOrder();
+   this.m_long_prop[ORDER_PROP_DEAL_ORDER_TICKET]                    = this.DealOrderTicket();
    this.m_long_prop[ORDER_PROP_DEAL_ENTRY]                           = this.DealEntry();
    this.m_long_prop[ORDER_PROP_POSITION_BY_ID]                       = this.OrderPositionByID();
    this.m_long_prop[ORDER_PROP_TIME_OPEN_MSC]                        = this.OrderOpenTimeMSC();
@@ -221,6 +225,7 @@ COrder::COrder(ENUM_ORDER_STATUS order_status,const ulong ticket)
    this.m_long_prop[ORDER_PROP_TICKET_TO]                            = this.OrderTicketTo();
    this.m_long_prop[ORDER_PROP_CLOSE_BY_SL]                          = this.OrderCloseByStopLoss();
    this.m_long_prop[ORDER_PROP_CLOSE_BY_TP]                          = this.OrderCloseByTakeProfit();
+   this.m_long_prop[ORDER_PROP_GROUP_ID]                             = 0;
    
 //--- Save additional real properties
    this.m_double_prop[this.IndexProp(ORDER_PROP_PROFIT_FULL)]        = this.ProfitFull();
@@ -351,7 +356,7 @@ long COrder::OrderTicketTo(void) const
    return ticket;
   }
 //+------------------------------------------------------------------+
-//| Return position ID                                               |
+//| Return the position ID                                           |
 //+------------------------------------------------------------------+
 long COrder::OrderPositionID(void) const
   {
@@ -582,9 +587,9 @@ long COrder::OrderReason(void) const
 #endif 
   }
 //+------------------------------------------------------------------+
-//| Order, based on which a deal is performed                        |
+//| Ticket of the order that triggered a deal                        |
 //+------------------------------------------------------------------+
-long COrder::DealOrder(void) const
+long COrder::DealOrderTicket(void) const
   {
 #ifdef __MQL4__
    return ::OrderTicket();
@@ -1187,7 +1192,7 @@ string COrder::StatusDescription(void) const
       status==ORDER_STATUS_MARKET_POSITION   ?  TextByLanguage("Позиция","Active position")              :
       status==ORDER_STATUS_MARKET_PENDING    ?  TextByLanguage("Установленный отложенный ордер","Active pending order") :
       status==ORDER_STATUS_HISTORY_PENDING   ?  TextByLanguage("Отложенный ордер","Pending order") :
-      ""
+      EnumToString(status)
      );
   }
 //+------------------------------------------------------------------+
@@ -1198,6 +1203,7 @@ string COrder::TypeDescription(void) const
    return
      (
       this.Status()==ORDER_STATUS_DEAL ? this.GetTypeDealDescription(this.TypeOrder()) :
+      this.Status()==ORDER_STATUS_MARKET_POSITION ? this.DirectionDescription() :
       OrderTypeDescription((ENUM_ORDER_TYPE)this.TypeOrder())
      );
   }
@@ -1241,7 +1247,7 @@ string COrder::DirectionDescription(void) const
          this.OrderType()==DEAL_TYPE_BALANCE ? 
            (
             this.OrderProfit()>0 ? TextByLanguage("Пополнение счёта","Account refilled") : 
-            TextByLanguage("Вывод средств","Withdrawals from account")
+            TextByLanguage("Вывод средств","Withdrawal from account")
            )                                          :
          this.OrderType()==DEAL_TYPE_BUY     ? "Buy"  : 
          this.OrderType()==DEAL_TYPE_SELL    ? "Sell" :
@@ -1333,7 +1339,7 @@ string COrder::GetPropertyDescription(ENUM_ORDER_PROP_INTEGER property)
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
           ": #"+(string)this.GetProperty(property)
          )  :
-      property==ORDER_PROP_DEAL_ORDER        ?  TextByLanguage("Сделка на основании ордера","Deal by order")+
+      property==ORDER_PROP_DEAL_ORDER_TICKET ?  TextByLanguage("Сделка на основании ордера с тикетом","Deal by order ticket")+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
           ": #"+(string)this.GetProperty(property)
          )  :
@@ -1380,7 +1386,11 @@ string COrder::GetPropertyDescription(ENUM_ORDER_PROP_INTEGER property)
          )  :
       property==ORDER_PROP_CLOSE_BY_TP       ?  TextByLanguage("Закрытие по TakeProfit","Close by TakeProfit")+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
-          ": "+(this.GetProperty(property) ? TextByLanguage("Да","Yes") : TextByLanguage("Нет","No"))
+          ": "+(this.GetProperty(property)   ? TextByLanguage("Да","Yes") : TextByLanguage("Нет","No"))
+         )  :
+      property==ORDER_PROP_GROUP_ID          ?  TextByLanguage("Идентификатор группы","Group's identifier")+
+         (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
+          ": "+(string)this.GetProperty(property)
          )  :
       ""
      );

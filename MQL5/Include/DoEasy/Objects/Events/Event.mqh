@@ -26,6 +26,7 @@ private:
    int               IndexProp(ENUM_EVENT_PROP_STRING property)const { return(int)property-EVENT_PROP_INTEGER_TOTAL-EVENT_PROP_DOUBLE_TOTAL; }
 protected:
    ENUM_TRADE_EVENT  m_trade_event;                                  // Trading event
+   bool              m_is_hedge;                                     // Hedge account flag
    long              m_chart_id;                                     // Control program chart ID
    int               m_digits_acc;                                   // Number of decimal places for the account currency
    long              m_long_prop[EVENT_PROP_INTEGER_TOTAL];          // Event integer properties
@@ -34,7 +35,7 @@ protected:
 //--- return the flag presence in the trading event
    bool              IsPresentEventFlag(const int event_code)  const { return (this.m_event_code & event_code)==event_code;            }
 
-   //--- Protected parametric constructor
+//--- Protected parametric constructor
                      CEvent(const ENUM_EVENT_STATUS event_status,const int event_code,const ulong ticket);
 public:
 //--- Default constructor
@@ -71,37 +72,51 @@ public:
 //+------------------------------------------------------------------+
 //--- Return (1) event type, (2) event time in milliseconds, (3) event status, (4) event reason, (5) deal type, (6) deal ticket, 
 //--- (7) order type, based on which a deal was executed, (8) position opening order type, (9) position last order ticket, 
-//--- (10) position first order ticket, (11) position ID, (12) opposite position ID, (13) magic number, (14) position open time
+//--- (10) position first order ticket, (11) position ID, (12) opposite position ID, (13) magic number, (14) opposite position magic number, (15) position open time
+   ENUM_TRADE_EVENT  TypeEvent(void)                                    const { return (ENUM_TRADE_EVENT)this.GetProperty(EVENT_PROP_TYPE_EVENT);           }
+   long              TimeEvent(void)                                    const { return this.GetProperty(EVENT_PROP_TIME_EVENT);                             }
+   ENUM_EVENT_STATUS Status(void)                                       const { return (ENUM_EVENT_STATUS)this.GetProperty(EVENT_PROP_STATUS_EVENT);        }
+   ENUM_EVENT_REASON Reason(void)                                       const { return (ENUM_EVENT_REASON)this.GetProperty(EVENT_PROP_REASON_EVENT);        }
+   ENUM_DEAL_TYPE    TypeDeal(void)                                     const { return (ENUM_DEAL_TYPE)this.GetProperty(EVENT_PROP_TYPE_DEAL_EVENT);        }
+   long              TicketDeal(void)                                   const { return this.GetProperty(EVENT_PROP_TICKET_DEAL_EVENT);                      }
+   ENUM_ORDER_TYPE   TypeOrderEvent(void)                               const { return (ENUM_ORDER_TYPE)this.GetProperty(EVENT_PROP_TYPE_ORDER_EVENT);      }
+   ENUM_ORDER_TYPE   TypeFirstOrderPosition(void)                       const { return (ENUM_ORDER_TYPE)this.GetProperty(EVENT_PROP_TYPE_ORDER_POSITION);   }
+   long              TicketOrderEvent(void)                             const { return this.GetProperty(EVENT_PROP_TICKET_ORDER_EVENT);                     }
+   long              TicketFirstOrderPosition(void)                     const { return this.GetProperty(EVENT_PROP_TICKET_ORDER_POSITION);                  }
+   long              PositionID(void)                                   const { return this.GetProperty(EVENT_PROP_POSITION_ID);                            }
+   long              PositionByID(void)                                 const { return this.GetProperty(EVENT_PROP_POSITION_BY_ID);                         }
+   long              Magic(void)                                        const { return this.GetProperty(EVENT_PROP_MAGIC_ORDER);                            }
+   long              MagicCloseBy(void)                                 const { return this.GetProperty(EVENT_PROP_MAGIC_BY_ID);                            }
+   long              TimePosition(void)                                 const { return this.GetProperty(EVENT_PROP_TIME_ORDER_POSITION);                    }
 
-   ENUM_TRADE_EVENT  TypeEvent(void)                                    const { return (ENUM_TRADE_EVENT)this.GetProperty(EVENT_PROP_TYPE_EVENT);     }
-   long              TimeEvent(void)                                    const { return this.GetProperty(EVENT_PROP_TIME_EVENT);                       }
-   ENUM_EVENT_STATUS Status(void)                                       const { return (ENUM_EVENT_STATUS)this.GetProperty(EVENT_PROP_STATUS_EVENT);  }
-   ENUM_EVENT_REASON Reason(void)                                       const { return (ENUM_EVENT_REASON)this.GetProperty(EVENT_PROP_REASON_EVENT);  }
-   long              TypeDeal(void)                                     const { return this.GetProperty(EVENT_PROP_TYPE_DEAL_EVENT);                  }
-   long              TicketDeal(void)                                   const { return this.GetProperty(EVENT_PROP_TICKET_DEAL_EVENT);                }
-   long              TypeOrderEvent(void)                               const { return this.GetProperty(EVENT_PROP_TYPE_ORDER_EVENT);                 }
-   long              TypeOrderPosition(void)                            const { return this.GetProperty(EVENT_PROP_TYPE_ORDER_POSITION);              }
-   long              TicketOrderEvent(void)                             const { return this.GetProperty(EVENT_PROP_TICKET_ORDER_EVENT);               }
-   long              TicketOrderPosition(void)                          const { return this.GetProperty(EVENT_PROP_TICKET_ORDER_POSITION);            }
-   long              PositionID(void)                                   const { return this.GetProperty(EVENT_PROP_POSITION_ID);                      }
-   long              PositionByID(void)                                 const { return this.GetProperty(EVENT_PROP_POSITION_BY_ID);                   }
-   long              Magic(void)                                        const { return this.GetProperty(EVENT_PROP_MAGIC_ORDER);                      }
-   long              TimePosition(void)                                 const { return this.GetProperty(EVENT_PROP_TIME_ORDER_POSITION);              }
+//--- When changing position direction, return (1) previous position order type, (2) previous position order ticket,
+//--- (3) current position order type, (4) current position order ticket,
+//--- (5) position type and (6) ticket before changing direction, (7) position type and (8) ticket after changing direction
+   ENUM_ORDER_TYPE   TypeOrderPosPrevious(void)                         const { return (ENUM_ORDER_TYPE)this.GetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE);   }
+   long              TicketOrderPosPrevious(void)                       const { return (ENUM_ORDER_TYPE)this.GetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE); }
+   ENUM_ORDER_TYPE   TypeOrderPosCurrent(void)                          const { return (ENUM_ORDER_TYPE)this.GetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT);  }
+   long              TicketOrderPosCurrent(void)                        const { return (ENUM_ORDER_TYPE)this.GetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT);}
+   ENUM_POSITION_TYPE TypePositionPrevious(void)                        const { return PositionTypeByOrderType(this.TypeOrderPosPrevious());                }
+   ulong             TicketPositionPrevious(void)                       const { return this.TicketOrderPosPrevious();                                       }
+   ENUM_POSITION_TYPE TypePositionCurrent(void)                         const { return PositionTypeByOrderType(this.TypeOrderPosCurrent());                 }
+   ulong             TicketPositionCurrent(void)                        const { return this.TicketOrderPosCurrent();                                        }
    
 //--- Return (1) the price the event occurred at, (2) open price, (3) close price,
-//--- (4) StopLoss price, (5) TakeProfit price, (6) profit, (7) requested volume, (8), executed volume, (9) remaining volume
-   double            PriceEvent(void)                                   const { return this.GetProperty(EVENT_PROP_PRICE_EVENT);                      }
-   double            PriceOpen(void)                                    const { return this.GetProperty(EVENT_PROP_PRICE_OPEN);                       }
-   double            PriceClose(void)                                   const { return this.GetProperty(EVENT_PROP_PRICE_CLOSE);                      }
-   double            PriceStopLoss(void)                                const { return this.GetProperty(EVENT_PROP_PRICE_SL);                         }
-   double            PriceTakeProfit(void)                              const { return this.GetProperty(EVENT_PROP_PRICE_TP);                         }
-   double            Profit(void)                                       const { return this.GetProperty(EVENT_PROP_PROFIT);                           }
-   double            VolumeInitial(void)                                const { return this.GetProperty(EVENT_PROP_VOLUME_INITIAL);                   }
-   double            VolumeExecuted(void)                               const { return this.GetProperty(EVENT_PROP_VOLUME_EXECUTED);                  }
-   double            VolumeCurrent(void)                                const { return this.GetProperty(EVENT_PROP_VOLUME_CURRENT);                   }
-   
-//--- Return a symbol
-   string            Symbol(void)                                       const { return this.GetProperty(EVENT_PROP_SYMBOL);                           }
+//--- (4) StopLoss price, (5) TakeProfit price, (6) profit, (7) requested order volume, 
+//--- (8) executed order volume, (9) remaining order volume, (10) executed position volume
+   double            PriceEvent(void)                                   const { return this.GetProperty(EVENT_PROP_PRICE_EVENT);                            }
+   double            PriceOpen(void)                                    const { return this.GetProperty(EVENT_PROP_PRICE_OPEN);                             }
+   double            PriceClose(void)                                   const { return this.GetProperty(EVENT_PROP_PRICE_CLOSE);                            }
+   double            PriceStopLoss(void)                                const { return this.GetProperty(EVENT_PROP_PRICE_SL);                               }
+   double            PriceTakeProfit(void)                              const { return this.GetProperty(EVENT_PROP_PRICE_TP);                               }
+   double            Profit(void)                                       const { return this.GetProperty(EVENT_PROP_PROFIT);                                 }
+   double            VolumeOrderInitial(void)                           const { return this.GetProperty(EVENT_PROP_VOLUME_ORDER_INITIAL);                   }
+   double            VolumeOrderExecuted(void)                          const { return this.GetProperty(EVENT_PROP_VOLUME_ORDER_EXECUTED);                  }
+   double            VolumeOrderCurrent(void)                           const { return this.GetProperty(EVENT_PROP_VOLUME_ORDER_CURRENT);                   }
+   double            VolumePositionExecuted(void)                       const { return this.GetProperty(EVENT_PROP_VOLUME_POSITION_EXECUTED);               }
+//--- Return the (1) symbol and (2) opposite position symbol
+   string            Symbol(void)                                       const { return this.GetProperty(EVENT_PROP_SYMBOL);                                 }
+   string            SymbolCloseBy(void)                                const { return this.GetProperty(EVENT_PROP_SYMBOL_BY_ID);                           }
    
 //+------------------------------------------------------------------+
 //| Descriptions of the order object properties                      |
@@ -111,14 +126,18 @@ public:
    string            GetPropertyDescription(ENUM_EVENT_PROP_DOUBLE property);
    string            GetPropertyDescription(ENUM_EVENT_PROP_STRING property);
 //--- Return the event's (1) status and (2) type
-   string            StatusDescription(void)          const;
-   string            TypeEventDescription(void)       const;
-//--- Return the name of an (1) order/position/deal, (2) parent order, (3) position
-   string            TypeOrderDescription(void)       const;
-   string            TypeOrderBasedDescription(void)  const;
-   string            TypePositionDescription(void)    const;
+   string            StatusDescription(void)                const;
+   string            TypeEventDescription(void)             const;
+//--- Return the name of an (1) event deal order, (2) position's parent order, (3) current position order and the (4) current position
+//--- Return the name of an (5) order and (6) position before the direction was changed
+   string            TypeOrderDealDescription(void)         const;
+   string            TypeOrderFirstDescription(void)        const;
+   string            TypeOrderEventDescription(void)        const;
+   string            TypePositionCurrentDescription(void)   const;
+   string            TypeOrderPreviousDescription(void)     const;
+   string            TypePositionPreviousDescription(void)  const;
 //--- Return the name of the deal/order/position reason
-   string            ReasonDescription(void)          const;
+   string            ReasonDescription(void)                const;
 
 //--- Display (1) description of order properties (full_prop=true - all properties, false - only supported ones),
 //--- (2) short event message (implementation in the class descendants) in the journal
@@ -132,6 +151,7 @@ CEvent::CEvent(const ENUM_EVENT_STATUS event_status,const int event_code,const u
   {
    this.m_long_prop[EVENT_PROP_STATUS_EVENT]       =  event_status;
    this.m_long_prop[EVENT_PROP_TICKET_ORDER_EVENT] =  (long)ticket;
+   this.m_is_hedge=bool(::AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING);
    this.m_digits_acc=(int)::AccountInfoInteger(ACCOUNT_CURRENCY_DIGITS);
    this.m_chart_id=::ChartID();
   }
@@ -212,19 +232,90 @@ void CEvent::SetTypeEvent(void)
 //--- Position is opened (Check for multiple flags in the event code)
    if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_POSITION_OPENED))
      {
-      //--- If this pending order is activated by the price
-      if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_ORDER_ACTIVATED))
+   //--- If an existing position is changed
+      if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_POSITION_CHANGED))
         {
-         //--- check the partial closure flag and set the "pending order activated" or "pending order partially activated" trading event
-         this.m_trade_event=(!this.IsPresentEventFlag(TRADE_EVENT_FLAG_PARTIAL) ? TRADE_EVENT_PENDING_ORDER_ACTIVATED : TRADE_EVENT_PENDING_ORDER_ACTIVATED_PARTIAL);
+         //--- If this pending order is activated by the price
+         if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_ORDER_ACTIVATED))
+           {
+            //--- If this is a position reversal
+            if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_POSITION_REVERSE))
+              {
+               //--- check the partial closure flag and set the 
+               //--- "position reversal by activation of a pending order" or "position reversal by partial activation of a pending order" trading event
+               this.m_trade_event=
+                 (
+                  !this.IsPresentEventFlag(TRADE_EVENT_FLAG_PARTIAL) ? 
+                  TRADE_EVENT_POSITION_REVERSED_BY_PENDING : 
+                  TRADE_EVENT_POSITION_REVERSED_BY_PENDING_PARTIAL
+                 );
+               this.SetProperty(EVENT_PROP_TYPE_EVENT,this.m_trade_event);
+               return;
+              }
+            //--- If this is adding a volume to a position
+            else
+              {
+               //--- check the partial closure flag and set the 
+               //--- "added volume to a position by activating a pending order" or "added volume to a position by partially activating a pending order" trading event
+               this.m_trade_event=
+                 (
+                  !this.IsPresentEventFlag(TRADE_EVENT_FLAG_PARTIAL) ? 
+                  TRADE_EVENT_POSITION_VOLUME_ADD_BY_PENDING : 
+                  TRADE_EVENT_POSITION_VOLUME_ADD_BY_PENDING_PARTIAL
+                 );
+               this.SetProperty(EVENT_PROP_TYPE_EVENT,this.m_trade_event);
+               return;
+              }
+           }
+         //--- If a position was changed by a market deal
+         else
+           {
+            //--- If this is a position reversal
+            if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_POSITION_REVERSE))
+              {
+               //--- check the partial opening flag and set the "position reversal" or "position reversal by partial execution" trading event
+               this.m_trade_event=
+                 (
+                  !this.IsPresentEventFlag(TRADE_EVENT_FLAG_PARTIAL) ? 
+                  TRADE_EVENT_POSITION_REVERSED_BY_MARKET : 
+                  TRADE_EVENT_POSITION_REVERSED_BY_MARKET_PARTIAL
+                 );
+               this.SetProperty(EVENT_PROP_TYPE_EVENT,this.m_trade_event);
+               return;
+              }
+            //--- If this is adding a volume to a position
+            else
+              {
+               //--- check the partial opening flag and set "added volume to a position" or "added volume to a position by partial execution" trading event
+               this.m_trade_event=
+                 (
+                  !this.IsPresentEventFlag(TRADE_EVENT_FLAG_PARTIAL) ? 
+                  TRADE_EVENT_POSITION_VOLUME_ADD_BY_MARKET : 
+                  TRADE_EVENT_POSITION_VOLUME_ADD_BY_MARKET_PARTIAL
+                 );
+               this.SetProperty(EVENT_PROP_TYPE_EVENT,this.m_trade_event);
+               return;
+              }
+           }
+        }
+   //--- If a new position is opened
+      else
+        {
+         //--- If this pending order is activated by the price
+         if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_ORDER_ACTIVATED))
+           {
+            //--- check the partial closing flag and set the "pending order activated" or "pending order partially activated" trading event
+            this.m_trade_event=(!this.IsPresentEventFlag(TRADE_EVENT_FLAG_PARTIAL) ? TRADE_EVENT_PENDING_ORDER_ACTIVATED : TRADE_EVENT_PENDING_ORDER_ACTIVATED_PARTIAL);
+            this.SetProperty(EVENT_PROP_TYPE_EVENT,this.m_trade_event);
+            return;
+           }
+         //--- check the partial opening flag and set the "Position opened" or "Position partially opened" trading event
+         this.m_trade_event=(!this.IsPresentEventFlag(TRADE_EVENT_FLAG_PARTIAL) ? TRADE_EVENT_POSITION_OPENED : TRADE_EVENT_POSITION_OPENED_PARTIAL);
          this.SetProperty(EVENT_PROP_TYPE_EVENT,this.m_trade_event);
          return;
         }
-      //--- check the partial opening flag and set the "Position opened" or "Position partially opened" trading event
-      this.m_trade_event=(!this.IsPresentEventFlag(TRADE_EVENT_FLAG_PARTIAL) ? TRADE_EVENT_POSITION_OPENED : TRADE_EVENT_POSITION_OPENED_PARTIAL);
-      this.SetProperty(EVENT_PROP_TYPE_EVENT,this.m_trade_event);
-      return;
      }
+     
 //--- Position is closed (Check for multiple flags in the event code)
    if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_POSITION_CLOSED))
      {
@@ -304,8 +395,13 @@ string CEvent::GetPropertyDescription(ENUM_EVENT_PROP_INTEGER property)
       property==EVENT_PROP_POSITION_ID             ?  TextByLanguage("Идентификатор позиции","Position ID")+" #"+(string)this.GetProperty(property)                                       :
       property==EVENT_PROP_POSITION_BY_ID          ?  TextByLanguage("Идентификатор встречной позиции","Opposite position's ID")+" #"+(string)this.GetProperty(property)                  :
       property==EVENT_PROP_MAGIC_ORDER             ?  TextByLanguage("Магический номер","Magic number")+": "+(string)this.GetProperty(property)                                           :
+      property==EVENT_PROP_MAGIC_BY_ID             ?  TextByLanguage("Магический номер встречной позиции","Magic number of opposite position")+": "+(string)this.GetProperty(property)    :
       property==EVENT_PROP_TIME_ORDER_POSITION     ?  TextByLanguage("Время открытия позиции","Position's opened time")+": "+TimeMSCtoString(this.GetProperty(property))                  :
-      ""
+      property==EVENT_PROP_TYPE_ORD_POS_BEFORE     ?  TextByLanguage("Тип ордера позиции до смены направления","Position order type before changing direction")                        :
+      property==EVENT_PROP_TICKET_ORD_POS_BEFORE   ?  TextByLanguage("Тикет ордера позиции до смены направления","Position order ticket before changing direction")                    :
+      property==EVENT_PROP_TYPE_ORD_POS_CURRENT    ?  TextByLanguage("Тип ордера текущей позиции","Current position order type")                                                       :
+      property==EVENT_PROP_TICKET_ORD_POS_CURRENT  ?  TextByLanguage("Тикет ордера текущей позиции","Current position order ticket")                                                   :
+      EnumToString(property)
      );
   }
 //+------------------------------------------------------------------+
@@ -317,16 +413,17 @@ string CEvent::GetPropertyDescription(ENUM_EVENT_PROP_DOUBLE property)
    int dgl=(int)DigitsLots(this.GetProperty(EVENT_PROP_SYMBOL));
    return
      (
-      property==EVENT_PROP_PRICE_EVENT       ?  TextByLanguage("Цена события","Price at the time of event")+": "+::DoubleToString(this.GetProperty(property),dg) :
-      property==EVENT_PROP_PRICE_OPEN        ?  TextByLanguage("Цена открытия","Open price")+": "+::DoubleToString(this.GetProperty(property),dg)                    :
-      property==EVENT_PROP_PRICE_CLOSE       ?  TextByLanguage("Цена закрытия","Close price")+": "+::DoubleToString(this.GetProperty(property),dg)                   :
-      property==EVENT_PROP_PRICE_SL          ?  TextByLanguage("Цена StopLoss","StopLoss price")+": "+::DoubleToString(this.GetProperty(property),dg)                :
-      property==EVENT_PROP_PRICE_TP          ?  TextByLanguage("Цена TakeProfit","TakeProfit price")+": "+::DoubleToString(this.GetProperty(property),dg)            :
-      property==EVENT_PROP_VOLUME_INITIAL    ?  TextByLanguage("Начальный объём","Initial volume")+": "+::DoubleToString(this.GetProperty(property),dgl)             :
-      property==EVENT_PROP_VOLUME_EXECUTED   ?  TextByLanguage("Исполненный объём","Executed volume")+": "+::DoubleToString(this.GetProperty(property),dgl)          :
-      property==EVENT_PROP_VOLUME_CURRENT    ?  TextByLanguage("Оставшийся объём","Remaining volume")+": "+::DoubleToString(this.GetProperty(property),dgl)          :
-      property==EVENT_PROP_PROFIT            ?  TextByLanguage("Профит","Profit")+": "+::DoubleToString(this.GetProperty(property),this.m_digits_acc)                :
-      ""
+      property==EVENT_PROP_PRICE_EVENT             ?  TextByLanguage("Цена события","Price at the time of the event")+": "+::DoubleToString(this.GetProperty(property),dg)          :
+      property==EVENT_PROP_PRICE_OPEN              ?  TextByLanguage("Цена открытия","Open price")+": "+::DoubleToString(this.GetProperty(property),dg)                             :
+      property==EVENT_PROP_PRICE_CLOSE             ?  TextByLanguage("Цена закрытия","Close price")+": "+::DoubleToString(this.GetProperty(property),dg)                            :
+      property==EVENT_PROP_PRICE_SL                ?  TextByLanguage("Цена StopLoss","StopLoss price")+": "+::DoubleToString(this.GetProperty(property),dg)                         :
+      property==EVENT_PROP_PRICE_TP                ?  TextByLanguage("Цена TakeProfit","TakeProfit price")+": "+::DoubleToString(this.GetProperty(property),dg)                     :
+      property==EVENT_PROP_VOLUME_ORDER_INITIAL    ?  TextByLanguage("Начальный объём ордера","Order initial volume")+": "+::DoubleToString(this.GetProperty(property),dgl)         :
+      property==EVENT_PROP_VOLUME_ORDER_EXECUTED   ?  TextByLanguage("Исполненный объём ордера","Order executed volume")+": "+::DoubleToString(this.GetProperty(property),dgl)      :
+      property==EVENT_PROP_VOLUME_ORDER_CURRENT    ?  TextByLanguage("Оставшийся объём ордера","Order remaining volume")+": "+::DoubleToString(this.GetProperty(property),dgl)      :
+      property==EVENT_PROP_VOLUME_POSITION_EXECUTED ? TextByLanguage("Текущий объём позиции","Position current volume")+": "+::DoubleToString(this.GetProperty(property),dgl)       :
+      property==EVENT_PROP_PROFIT                  ?  TextByLanguage("Профит","Profit")+": "+::DoubleToString(this.GetProperty(property),this.m_digits_acc)                         :
+      EnumToString(property)
      );
   }
 //+------------------------------------------------------------------+
@@ -334,7 +431,11 @@ string CEvent::GetPropertyDescription(ENUM_EVENT_PROP_DOUBLE property)
 //+------------------------------------------------------------------+
 string CEvent::GetPropertyDescription(ENUM_EVENT_PROP_STRING property)
   {
-   return TextByLanguage("Символ","Symbol")+": \""+this.GetProperty(property)+"\"";
+   return
+     (
+      property==EVENT_PROP_SYMBOL ? TextByLanguage("Символ","Symbol")+": \""+this.GetProperty(property)+"\""   :
+      TextByLanguage("Символ встречной позиции","Symbol of opposite position")+": \""+this.GetProperty(property)+"\""
+     );
   }
 //+------------------------------------------------------------------+
 //| Return the event status name                                     |
@@ -349,7 +450,7 @@ string CEvent::StatusDescription(void) const
       status==EVENT_STATUS_HISTORY_PENDING   ?  TextByLanguage("Удален отложенный ордер","Pending order removed")    :
       status==EVENT_STATUS_HISTORY_POSITION  ?  TextByLanguage("Закрыта позиция","Position closed")                  :
       status==EVENT_STATUS_BALANCE           ?  TextByLanguage("Балансная операция","Balance operation")             :
-      ""
+      TextByLanguage("Неизвестный статус","Unknown status")
      );
   }
 //+------------------------------------------------------------------+
@@ -360,69 +461,97 @@ string CEvent::TypeEventDescription(void) const
    ENUM_TRADE_EVENT event=this.TypeEvent();
    return
      (
-      event==TRADE_EVENT_PENDING_ORDER_PLASED            ?  TextByLanguage("Отложенный ордер установлен","Pending order placed")                                  :
-      event==TRADE_EVENT_PENDING_ORDER_REMOVED           ?  TextByLanguage("Отложенный ордер удалён","Pending order removed")                                     :
-      event==TRADE_EVENT_ACCOUNT_CREDIT                  ?  TextByLanguage("Начисление кредита","Credit")                                                         :
-      event==TRADE_EVENT_ACCOUNT_CHARGE                  ?  TextByLanguage("Дополнительные сборы","Additional charge")                                            :
-      event==TRADE_EVENT_ACCOUNT_CORRECTION              ?  TextByLanguage("Корректирующая запись","Correction")                                                  :
-      event==TRADE_EVENT_ACCOUNT_BONUS                   ?  TextByLanguage("Перечисление бонусов","Bonus")                                                        :
-      event==TRADE_EVENT_ACCOUNT_COMISSION               ?  TextByLanguage("Дополнительные комиссии","Additional commission")                                     :
-      event==TRADE_EVENT_ACCOUNT_COMISSION_DAILY         ?  TextByLanguage("Комиссия, начисляемая в конце торгового дня","Daily commission")                      :
-      event==TRADE_EVENT_ACCOUNT_COMISSION_MONTHLY       ?  TextByLanguage("Комиссия, начисляемая в конце месяца","Monthly commission")                           :
-      event==TRADE_EVENT_ACCOUNT_COMISSION_AGENT_DAILY   ?  TextByLanguage("Агентская комиссия, начисляемая в конце торгового дня","Daily agent commission")      :
-      event==TRADE_EVENT_ACCOUNT_COMISSION_AGENT_MONTHLY ?  TextByLanguage("Агентская комиссия, начисляемая в конце месяца","Monthly agent commission")           :
-      event==TRADE_EVENT_ACCOUNT_INTEREST                ?  TextByLanguage("Начисления процентов на свободные средства","Interest rate")                          :
-      event==TRADE_EVENT_BUY_CANCELLED                   ?  TextByLanguage("Отмененная сделка покупки","Canceled buy deal")                                       :
-      event==TRADE_EVENT_SELL_CANCELLED                  ?  TextByLanguage("Отмененная сделка продажи","Canceled sell deal")                                      :
-      event==TRADE_EVENT_DIVIDENT                        ?  TextByLanguage("Начисление дивиденда","Dividend operations")                                          :
-      event==TRADE_EVENT_DIVIDENT_FRANKED                ?  TextByLanguage("Начисление франкированного дивиденда","Franked (non-taxable) dividend operations")    :
-      event==TRADE_EVENT_TAX                             ?  TextByLanguage("Начисление налога","Tax charges")                                                     :
-      event==TRADE_EVENT_ACCOUNT_BALANCE_REFILL          ?  TextByLanguage("Пополнение средств на балансе","Balance refill")                                      :
-      event==TRADE_EVENT_ACCOUNT_BALANCE_WITHDRAWAL      ?  TextByLanguage("Снятие средств с баланса","Withdrawals")                                              :
-      event==TRADE_EVENT_PENDING_ORDER_ACTIVATED         ?  TextByLanguage("Отложенный ордер активирован ценой","Pending order activated")                        :
-      event==TRADE_EVENT_PENDING_ORDER_ACTIVATED_PARTIAL ?  TextByLanguage("Отложенный ордер активирован ценой частично","Pending order activated partially")     :
-      event==TRADE_EVENT_POSITION_OPENED                 ?  TextByLanguage("Позиция открыта","Position opened")                                                  :
-      event==TRADE_EVENT_POSITION_OPENED_PARTIAL         ?  TextByLanguage("Позиция открыта частично","Position opened partially")                               :
-      event==TRADE_EVENT_POSITION_CLOSED                 ?  TextByLanguage("Позиция закрыта","Position closed")                                                   :
-      event==TRADE_EVENT_POSITION_CLOSED_PARTIAL         ?  TextByLanguage("Позиция закрыта частично","Position closed partially")                                :
-      event==TRADE_EVENT_POSITION_CLOSED_BY_POS          ?  TextByLanguage("Позиция закрыта встречной","Position closed by opposite position")                    :
-      event==TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_POS  ?  TextByLanguage("Позиция закрыта встречной частично","Position closed partially by opposite position") :
-      event==TRADE_EVENT_POSITION_CLOSED_BY_SL           ?  TextByLanguage("Позиция закрыта по StopLoss","Position closed by StopLoss")                           :
-      event==TRADE_EVENT_POSITION_CLOSED_BY_TP           ?  TextByLanguage("Позиция закрыта по TakeProfit","Position closed by TakeProfit")                       :
-      event==TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_SL   ?  TextByLanguage("Позиция закрыта частично по StopLoss","Position closed partially by StopLoss")        :
-      event==TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_TP   ?  TextByLanguage("Позиция закрыта частично по TakeProfit","Position closed partially by TakeProfit")    :
-      event==TRADE_EVENT_POSITION_REVERSED               ?  TextByLanguage("Разворот позиции","Position reversal")                                                :
-      event==TRADE_EVENT_POSITION_VOLUME_ADD             ?  TextByLanguage("Добавлен объём к позиции","Added volume to position")                                 :
+      event==TRADE_EVENT_PENDING_ORDER_PLASED                  ?  TextByLanguage("Отложенный ордер установлен","Pending order placed")                                  :
+      event==TRADE_EVENT_PENDING_ORDER_REMOVED                 ?  TextByLanguage("Отложенный ордер удалён","Pending order removed")                                     :
+      event==TRADE_EVENT_ACCOUNT_CREDIT                        ?  TextByLanguage("Начисление кредита","Credit")                                                         :
+      event==TRADE_EVENT_ACCOUNT_CHARGE                        ?  TextByLanguage("Дополнительные сборы","Additional charge")                                            :
+      event==TRADE_EVENT_ACCOUNT_CORRECTION                    ?  TextByLanguage("Корректирующая запись","Correction")                                                  :
+      event==TRADE_EVENT_ACCOUNT_BONUS                         ?  TextByLanguage("Перечисление бонусов","Bonus")                                                        :
+      event==TRADE_EVENT_ACCOUNT_COMISSION                     ?  TextByLanguage("Дополнительные комиссии","Additional commission")                                     :
+      event==TRADE_EVENT_ACCOUNT_COMISSION_DAILY               ?  TextByLanguage("Комиссия, начисляемая в конце торгового дня","Daily commission")                      :
+      event==TRADE_EVENT_ACCOUNT_COMISSION_MONTHLY             ?  TextByLanguage("Комиссия, начисляемая в конце месяца","Monthly commission")                           :
+      event==TRADE_EVENT_ACCOUNT_COMISSION_AGENT_DAILY         ?  TextByLanguage("Агентская комиссия, начисляемая в конце торгового дня","Daily agent commission")      :
+      event==TRADE_EVENT_ACCOUNT_COMISSION_AGENT_MONTHLY       ?  TextByLanguage("Агентская комиссия, начисляемая в конце месяца","Monthly agent commission")           :
+      event==TRADE_EVENT_ACCOUNT_INTEREST                      ?  TextByLanguage("Начисления процентов на свободные средства","Interest rate")                          :
+      event==TRADE_EVENT_BUY_CANCELLED                         ?  TextByLanguage("Отмененная сделка покупки","Canceled buy deal")                                       :
+      event==TRADE_EVENT_SELL_CANCELLED                        ?  TextByLanguage("Отмененная сделка продажи","Canceled sell deal")                                      :
+      event==TRADE_EVENT_DIVIDENT                              ?  TextByLanguage("Начисление дивиденда","Dividend operations")                                          :
+      event==TRADE_EVENT_DIVIDENT_FRANKED                      ?  TextByLanguage("Начисление франкированного дивиденда","Franked (non-taxable) dividend operations")    :
+      event==TRADE_EVENT_TAX                                   ?  TextByLanguage("Начисление налога","Tax charges")                                                     :
+      event==TRADE_EVENT_ACCOUNT_BALANCE_REFILL                ?  TextByLanguage("Пополнение средств на балансе","Balance refill")                                      :
+      event==TRADE_EVENT_ACCOUNT_BALANCE_WITHDRAWAL            ?  TextByLanguage("Снятие средств с баланса","Withdrawal")                                              :
+      event==TRADE_EVENT_PENDING_ORDER_ACTIVATED               ?  TextByLanguage("Отложенный ордер активирован ценой","Pending order activated")                        :
+      event==TRADE_EVENT_PENDING_ORDER_ACTIVATED_PARTIAL       ?  TextByLanguage("Отложенный ордер активирован ценой частично","Pending order activated partially")     :
+      event==TRADE_EVENT_POSITION_OPENED                       ?  TextByLanguage("Позиция открыта","Position opened")                                                  :
+      event==TRADE_EVENT_POSITION_OPENED_PARTIAL               ?  TextByLanguage("Позиция открыта частично","Position opened partially")                               :
+      event==TRADE_EVENT_POSITION_CLOSED                       ?  TextByLanguage("Позиция закрыта","Position closed")                                                   :
+      event==TRADE_EVENT_POSITION_CLOSED_PARTIAL               ?  TextByLanguage("Позиция закрыта частично","Position closed partially")                                :
+      event==TRADE_EVENT_POSITION_CLOSED_BY_POS                ?  TextByLanguage("Позиция закрыта встречной","Position closed by opposite position")                    :
+      event==TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_POS        ?  TextByLanguage("Позиция закрыта встречной частично","Position closed partially by opposite position") :
+      event==TRADE_EVENT_POSITION_CLOSED_BY_SL                 ?  TextByLanguage("Позиция закрыта по StopLoss","Position closed by StopLoss")                           :
+      event==TRADE_EVENT_POSITION_CLOSED_BY_TP                 ?  TextByLanguage("Позиция закрыта по TakeProfit","Position closed by TakeProfit")                       :
+      event==TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_SL         ?  TextByLanguage("Позиция закрыта частично по StopLoss","Position closed partially by StopLoss")        :
+      event==TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_TP         ?  TextByLanguage("Позиция закрыта частично по TakeProfit","Position closed partially by TakeProfit")    :
+      event==TRADE_EVENT_POSITION_REVERSED_BY_MARKET           ?  TextByLanguage("Разворот позиции по рыночному запросу","Position reversal by market request")         :
+      event==TRADE_EVENT_POSITION_REVERSED_BY_PENDING          ?  TextByLanguage("Разворот позиции срабатыванием отложенного ордера","Position reversal by a triggered pending order")                            :
+      event==TRADE_EVENT_POSITION_VOLUME_ADD_BY_MARKET         ?  TextByLanguage("Добавлен объём к позиции по рыночному запросу","Added volume to position by market request")                                    :
+      event==TRADE_EVENT_POSITION_VOLUME_ADD_BY_PENDING        ?  TextByLanguage("Добавлен объём к позиции активацией отложенного ордера","Added volume to the position by activation of a pending order")        :
+      
+      event==TRADE_EVENT_POSITION_REVERSED_BY_MARKET_PARTIAL   ?  TextByLanguage("Разворот позиции частичным исполнением запроса","Position reversal by partial completion of market request")                   :
+      event==TRADE_EVENT_POSITION_REVERSED_BY_PENDING_PARTIAL  ?  TextByLanguage("Разворот позиции частичным срабатыванием отложенного ордера","Position reversal by a partially triggered pending order")        :
+      event==TRADE_EVENT_POSITION_VOLUME_ADD_BY_MARKET_PARTIAL ?  TextByLanguage("Добавлен объём к позиции частичным исполнением запроса","Added volume to position by partial completion of a market request")    :
+      event==TRADE_EVENT_POSITION_VOLUME_ADD_BY_PENDING_PARTIAL ? TextByLanguage("Добавлен объём к позиции активацией отложенного ордера","Added volume to position by a triggered pending order")  :
       TextByLanguage("Нет торгового события","No trade event")
      );   
   }
 //+------------------------------------------------------------------+
 //| Return the name of the order/position/deal                       |
 //+------------------------------------------------------------------+
-string CEvent::TypeOrderDescription(void) const
+string CEvent::TypeOrderDealDescription(void) const
   {
    ENUM_EVENT_STATUS status=this.Status();
    return
      (
       status==EVENT_STATUS_MARKET_PENDING  || status==EVENT_STATUS_HISTORY_PENDING  ?  OrderTypeDescription((ENUM_ORDER_TYPE)this.GetProperty(EVENT_PROP_TYPE_ORDER_EVENT))      :
       status==EVENT_STATUS_MARKET_POSITION || status==EVENT_STATUS_HISTORY_POSITION ?  PositionTypeDescription((ENUM_POSITION_TYPE)this.GetProperty(EVENT_PROP_TYPE_DEAL_EVENT)) :
-      status==EVENT_STATUS_BALANCE  ?  DealTypeDescription((ENUM_DEAL_TYPE)this.GetProperty(EVENT_PROP_TYPE_DEAL_EVENT))  :  "Unknown"
+      status==EVENT_STATUS_BALANCE  ?  DealTypeDescription((ENUM_DEAL_TYPE)this.GetProperty(EVENT_PROP_TYPE_DEAL_EVENT))  :  
+      TextByLanguage("Неизвестный тип ордера","Unknown order type")
      );
   }
 //+------------------------------------------------------------------+
-//| Return the name of the parent order                              |
+//| Return the name of the position's first order                    |
 //+------------------------------------------------------------------+
-string CEvent::TypeOrderBasedDescription(void) const
+string CEvent::TypeOrderFirstDescription(void) const
   {
    return OrderTypeDescription((ENUM_ORDER_TYPE)this.GetProperty(EVENT_PROP_TYPE_ORDER_POSITION));
   }
 //+------------------------------------------------------------------+
-//| Return the position name                                         |
+//| Return the name of the order that changed the position           |
 //+------------------------------------------------------------------+
-string CEvent::TypePositionDescription(void) const
+string CEvent::TypeOrderEventDescription(void) const
   {
-   ENUM_POSITION_TYPE type=PositionTypeByOrderType((ENUM_ORDER_TYPE)this.GetProperty(EVENT_PROP_TYPE_ORDER_POSITION));
-   return PositionTypeDescription(type);
+   return OrderTypeDescription(this.TypeOrderEvent());
+  }
+//+------------------------------------------------------------------+
+//| Return the name of the current position                          |
+//+------------------------------------------------------------------+
+string CEvent::TypePositionCurrentDescription(void) const
+  {
+   return PositionTypeDescription(this.TypePositionCurrent());
+  }
+//+------------------------------------------------------------------+
+//| Return the name of the order before changing the direction       |
+//+------------------------------------------------------------------+
+string CEvent::TypeOrderPreviousDescription(void) const
+  {
+   return OrderTypeDescription(this.TypeOrderPosPrevious());
+  }
+//+------------------------------------------------------------------+
+//| Return the name of the position before changing the direction    |
+//+------------------------------------------------------------------+
+string CEvent::TypePositionPreviousDescription(void) const
+  {
+   return PositionTypeDescription(this.TypePositionPrevious());
   }
 //+------------------------------------------------------------------+
 //| Return the name of the deal/order/position reason                |
@@ -436,18 +565,26 @@ string CEvent::ReasonDescription(void) const
       reason==EVENT_REASON_ACTIVATED_PENDING_PARTIALLY      ?  TextByLanguage("Частичное срабатывание отложенного ордера","Pending order partially triggered")    :
       reason==EVENT_REASON_CANCEL                           ?  TextByLanguage("Отмена","Canceled")                                                                :
       reason==EVENT_REASON_EXPIRED                          ?  TextByLanguage("Истёк срок действия","Expired")                                                    :
-      reason==EVENT_REASON_DONE                             ?  TextByLanguage("Запрос выполнен полностью","Request fully executed")                            :
-      reason==EVENT_REASON_DONE_PARTIALLY                   ?  TextByLanguage("Запрос выполнен частично","Request partially executed")                         :
-      reason==EVENT_REASON_DONE_SL                          ?  TextByLanguage("закрытие по StopLoss","Close by StopLoss triggered")                               :
-      reason==EVENT_REASON_DONE_SL_PARTIALLY                ?  TextByLanguage("Частичное закрытие по StopLoss","Partial close by StopLoss triggered")             :
-      reason==EVENT_REASON_DONE_TP                          ?  TextByLanguage("закрытие по TakeProfit","Close by TakeProfit triggered")                           :
-      reason==EVENT_REASON_DONE_TP_PARTIALLY                ?  TextByLanguage("Частичное закрытие по TakeProfit","Partial close by TakeProfit triggered")         :
+      reason==EVENT_REASON_DONE                             ?  TextByLanguage("Рыночный запрос, выполненный в полном объёме","Fully completed market request")    :
+      reason==EVENT_REASON_DONE_PARTIALLY                   ?  TextByLanguage("Выполненный частично рыночный запрос","Partially completed market request")        :
+      reason==EVENT_REASON_VOLUME_ADD                       ?  TextByLanguage("Добавлен объём к позиции","Added volume to position")                              :
+      reason==EVENT_REASON_VOLUME_ADD_PARTIALLY             ?  TextByLanguage("Добавлен объём к позиции частичным исполнением заявки","Volume added to position by request partial completion")                 :
+      reason==EVENT_REASON_VOLUME_ADD_BY_PENDING            ?  TextByLanguage("Добавлен объём к позиции активацией отложенного ордера","Added volume to position by triggering pending order")                      :
+      reason==EVENT_REASON_VOLUME_ADD_BY_PENDING_PARTIALLY  ?  TextByLanguage("Добавлен объём к позиции частичной активацией отложенного ордера","Added volume to position by partially triggered pending order")  :
+      reason==EVENT_REASON_REVERSE                          ?  TextByLanguage("Разворот позиции","Position reversal")  :
+      reason==EVENT_REASON_REVERSE_PARTIALLY                ?  TextByLanguage("Разворот позиции частичным исполнением заявки","Position reversal by partial request execution")                             :
+      reason==EVENT_REASON_REVERSE_BY_PENDING               ?  TextByLanguage("Разворот позиции при срабатывании отложенного ордера","Position reversal on triggered pending order")                               :
+      reason==EVENT_REASON_REVERSE_BY_PENDING_PARTIALLY     ?  TextByLanguage("Разворот позиции при при частичном срабатывании отложенного ордера","Position reversal on partially triggered pending order")       :
+      reason==EVENT_REASON_DONE_SL                          ?  TextByLanguage("Закрытие по StopLoss","Close by StopLoss triggered")                               :
+      reason==EVENT_REASON_DONE_SL_PARTIALLY                ?  TextByLanguage("Частичное закрытие по StopLoss","Partial close by StopLoss triggered")           :
+      reason==EVENT_REASON_DONE_TP                          ?  TextByLanguage("Закрытие по TakeProfit","Close by TakeProfit triggered")                           :
+      reason==EVENT_REASON_DONE_TP_PARTIALLY                ?  TextByLanguage("Частичное закрытие по TakeProfit","Partial close by TakeProfit triggered")       :
       reason==EVENT_REASON_DONE_BY_POS                      ?  TextByLanguage("Закрытие встречной позицией","Closed by opposite position")                        :
       reason==EVENT_REASON_DONE_PARTIALLY_BY_POS            ?  TextByLanguage("Частичное закрытие встречной позицией","Closed partially by opposite position")    :
       reason==EVENT_REASON_DONE_BY_POS_PARTIALLY            ?  TextByLanguage("Закрытие частью объёма встречной позиции","Closed by incomplete volume of opposite position") :
       reason==EVENT_REASON_DONE_PARTIALLY_BY_POS_PARTIALLY  ?  TextByLanguage("Частичное закрытие частью объёма встречной позиции","Closed partially by incomplete volume of opposite position")  :
       reason==EVENT_REASON_BALANCE_REFILL                   ?  TextByLanguage("Пополнение баланса","Balance refill")                                              :
-      reason==EVENT_REASON_BALANCE_WITHDRAWAL               ?  TextByLanguage("Снятие средств с баланса","Withdrawals from the balance")                          :
+      reason==EVENT_REASON_BALANCE_WITHDRAWAL               ?  TextByLanguage("Снятие средств с баланса","Withdrawal from the balance")                          :
       reason==EVENT_REASON_ACCOUNT_CREDIT                   ?  TextByLanguage("Начисление кредита","Credit")                                                      :
       reason==EVENT_REASON_ACCOUNT_CHARGE                   ?  TextByLanguage("Дополнительные сборы","Additional charge")                                         :
       reason==EVENT_REASON_ACCOUNT_CORRECTION               ?  TextByLanguage("Корректирующая запись","Correction")                                               :

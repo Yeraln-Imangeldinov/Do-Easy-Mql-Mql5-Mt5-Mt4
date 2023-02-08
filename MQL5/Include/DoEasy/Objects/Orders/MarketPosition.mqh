@@ -33,14 +33,15 @@ bool CMarketPosition::SupportProperty(ENUM_ORDER_PROP_INTEGER property)
       property==ORDER_PROP_TIME_CLOSE_MSC ||
       property==ORDER_PROP_TIME_EXP       ||
       property==ORDER_PROP_POSITION_BY_ID ||
-      property==ORDER_PROP_DEAL_ORDER     ||
       property==ORDER_PROP_DEAL_ENTRY     ||
+      property==ORDER_PROP_STATE          ||
       property==ORDER_PROP_CLOSE_BY_SL    ||
-      property==ORDER_PROP_CLOSE_BY_TP
-     #ifdef __MQL5__                      ||
+      property==ORDER_PROP_CLOSE_BY_TP    ||
+      property==ORDER_PROP_DEAL_ORDER_TICKET
+   #ifdef __MQL5__                        ||
       property==ORDER_PROP_TICKET_FROM    ||
       property==ORDER_PROP_TICKET_TO
-     #endif 
+   #endif 
      ) return false;
    return true;
 }
@@ -50,7 +51,13 @@ bool CMarketPosition::SupportProperty(ENUM_ORDER_PROP_INTEGER property)
 //+------------------------------------------------------------------+
 bool CMarketPosition::SupportProperty(ENUM_ORDER_PROP_DOUBLE property)
   {
-   if(property==ORDER_PROP_PRICE_CLOSE || property==ORDER_PROP_PRICE_STOP_LIMIT) return false;
+   if(property==ORDER_PROP_PRICE_CLOSE       || 
+      property==ORDER_PROP_PRICE_STOP_LIMIT
+   #ifdef __MQL5__                           ||
+      property==ORDER_PROP_COMMISSION        ||
+      property==ORDER_PROP_VOLUME_CURRENT
+   #endif 
+     ) return false;
    return true;
   }
 //+------------------------------------------------------------------+

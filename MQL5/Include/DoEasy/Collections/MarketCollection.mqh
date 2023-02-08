@@ -152,7 +152,7 @@ void CMarketCollection::Refresh(void)
       ulong ticket=::OrderGetTicket(i);
       if(ticket==0) continue;
       ENUM_ORDER_TYPE type=(ENUM_ORDER_TYPE)::OrderGetInteger(ORDER_TYPE);
-      if(type==ORDER_TYPE_BUY || type==ORDER_TYPE_SELL)
+      if(type<ORDER_TYPE_BUY_LIMIT)
         {
          CMarketOrder *order=new CMarketOrder(ticket);
          if(order==NULL) continue;
@@ -163,7 +163,7 @@ void CMarketCollection::Refresh(void)
            }
          else
            {
-            ::Print(DFUN,TextByLanguage("Не удалось добавить маркет-ордер в список","Failed to add market order to the list"));
+            ::Print(DFUN,TextByLanguage("Не удалось добавить маркет-ордер в список","Failed to add market order to list"));
             delete order;
            }
         }

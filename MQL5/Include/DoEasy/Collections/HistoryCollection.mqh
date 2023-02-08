@@ -88,7 +88,7 @@ void CHistoryCollection::Refresh(void)
          //--- Removed pending orders
          CHistoryPending *order=new CHistoryPending(::OrderTicket());
          if(order==NULL) continue;
-         if(!this.m_list_all_orders.InsertSort(order))this.m_list_all_orders.Type()
+         if(!this.m_list_all_orders.InsertSort(order))
            {
             ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Could not add order to list"));
             delete order;

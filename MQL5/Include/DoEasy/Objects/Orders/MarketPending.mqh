@@ -29,7 +29,7 @@ public:
 bool CMarketPending::SupportProperty(ENUM_ORDER_PROP_INTEGER property)
   {
    if(property==ORDER_PROP_PROFIT_PT         ||
-      property==ORDER_PROP_DEAL_ORDER        ||
+      property==ORDER_PROP_DEAL_ORDER_TICKET ||
       property==ORDER_PROP_DEAL_ENTRY        ||
       property==ORDER_PROP_TIME_UPDATE       ||
       property==ORDER_PROP_TIME_CLOSE        ||

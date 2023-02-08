@@ -42,11 +42,11 @@ bool CHistoryDeal::SupportProperty(ENUM_ORDER_PROP_INTEGER property)
        this.OrderType()==DEAL_TYPE_BALANCE &&
        (
         property==ORDER_PROP_POSITION_ID     ||
-        property==ORDER_PROP_DEAL_ORDER      ||
         property==ORDER_PROP_DEAL_ENTRY      ||
         property==ORDER_PROP_MAGIC           ||
         property==ORDER_PROP_CLOSE_BY_SL     ||
-        property==ORDER_PROP_CLOSE_BY_TP
+        property==ORDER_PROP_CLOSE_BY_TP     ||
+        property==ORDER_PROP_DEAL_ORDER_TICKET
        )
       )
      ) return false;

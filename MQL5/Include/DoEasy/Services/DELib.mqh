@@ -15,6 +15,23 @@
 //| Service functions                                                |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
+//| Display all sorting enumeration constants in the journal         |
+//+------------------------------------------------------------------+
+void EnumNumbersTest()
+  {
+   string enm="ENUM_SORT_ORDERS_MODE";
+   string t=StringSubstr(enm,5,5)+"BY";
+   Print("Search of the values of the enumaration ",enm,":");
+   ENUM_SORT_ORDERS_MODE type=0;
+   while(StringFind(EnumToString(type),t)==0)
+     {
+      Print(enm,"[",type,"]=",EnumToString(type));
+      if(type>500) break;
+      type++;
+     }
+   Print("\nNumber of members of the ",enm,"=",type);
+  }
+//+------------------------------------------------------------------+
 //| Return the text in one of two languages                          |
 //+------------------------------------------------------------------+
 string TextByLanguage(const string text_country_lang,const string text_en)
@@ -181,7 +198,7 @@ double CorrectPricePending(const string symbol_name,const ENUM_ORDER_TYPE order_
       case ORDER_TYPE_SELL_LIMIT       :  pp=(price==0 ? SymbolInfoDouble(symbol_name,SYMBOL_BID) : price); return NormalizeDouble(fmax(pp+lv*pt,pp+distance_set*pt),dg);
       case ORDER_TYPE_SELL_STOP        :  
       case ORDER_TYPE_SELL_STOP_LIMIT  :  pp=(price==0 ? SymbolInfoDouble(symbol_name,SYMBOL_BID) : price); return NormalizeDouble(fmin(pp-lv*pt,pp-distance_set*pt),dg);
-      default                          :  Print(DFUN,TextByLanguage("Неправильный тип ордера: ","Invalid order type: "),EnumToString(order_type)); return 0;
+      default                          :  Print(DFUN,TextByLanguage("Не правильный тип ордера: ","Invalid order type: "),EnumToString(order_type)); return 0;
      }
   }
 //+------------------------------------------------------------------+

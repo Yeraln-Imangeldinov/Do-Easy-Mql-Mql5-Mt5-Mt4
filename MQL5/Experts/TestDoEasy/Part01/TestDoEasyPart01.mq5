@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                             TestDoEasyPart05.mq5 |
+//|                                             TestDoEasyPart06.mq5 |
 //|                        Copyright 2018, MetaQuotes Software Corp. |
 //|                             https://mql5.com/en/users/artmedia70 |
 //+------------------------------------------------------------------+
@@ -66,12 +66,9 @@ uint           slippage;
 //+------------------------------------------------------------------+
 int OnInit()
   {
-//--- Check account type
-   if(!engine.IsHedge())
-     {
-      Alert(TextByLanguage("Ошибка. Счёт должен быть хеджевым","Error. Account must be hedge"));
-      return INIT_FAILED;
-     }
+//--- Calling the function displays the list of enumeration constants in the journal 
+//--- (the list is set in the strings 22 and 25 of the DELib.mqh file) for checking the constants validity
+   //EnumNumbersTest();
 //--- set global variables
    prefix=MQLInfoString(MQL_PROGRAM_NAME)+"_";
    for(int i=0;i<TOTAL_BUTT;i++)
@@ -89,7 +86,7 @@ int OnInit()
 //--- create buttons
    if(!CreateButtons(InpButtShiftX,InpButtShiftY))
       return INIT_FAILED;
-//--- setting trade parameters
+//--- set trade parameters
    trade.SetDeviationInPoints(slippage);
    trade.SetExpertMagicNumber(magic_number);
    trade.SetTypeFillingBySymbol(Symbol());
@@ -381,7 +378,10 @@ void PressButtonEvents(const string button_name)
             if(position!=NULL)
               {
                //--- Calculate the closed volume and close the half of the Buy position by the ticket
-               trade.PositionClosePartial(position.Ticket(),NormalizeLot(position.Symbol(),position.Volume()/2.0));
+               if(engine.IsHedge())
+                  trade.PositionClosePartial(position.Ticket(),NormalizeLot(position.Symbol(),position.Volume()/2.0));
+               else
+                  trade.Sell(NormalizeLot(position.Symbol(),position.Volume()/2.0));
               }
            }
         }
@@ -455,7 +455,10 @@ void PressButtonEvents(const string button_name)
             if(position!=NULL)
               {
                //--- Calculate the closed volume and close the half of the Sell position by the ticket
-               trade.PositionClosePartial(position.Ticket(),NormalizeLot(position.Symbol(),position.Volume()/2.0));
+               if(engine.IsHedge())
+                  trade.PositionClosePartial(position.Ticket(),NormalizeLot(position.Symbol(),position.Volume()/2.0));
+               else
+                  trade.Buy(NormalizeLot(position.Symbol(),position.Volume()/2.0));
               }
            }
         }
