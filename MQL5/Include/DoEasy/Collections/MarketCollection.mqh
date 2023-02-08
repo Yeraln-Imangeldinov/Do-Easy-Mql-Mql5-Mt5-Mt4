@@ -11,6 +11,7 @@
 //+------------------------------------------------------------------+
 #include <Arrays\ArrayObj.mqh>
 #include "Select.mqh"
+#include "..\Objects\MarketOrder.mqh"
 #include "..\Objects\MarketPending.mqh"
 #include "..\Objects\MarketPosition.mqh"
 //+------------------------------------------------------------------+
@@ -22,6 +23,7 @@ private:
    struct MqlDataCollection
      {
       long           hash_sum_acc;           // Hash sum of all orders and positions on the account
+      int            total_market;           // Number of market orders on the account
       int            total_pending;          // Number of pending orders on the account
       int            total_positions;        // Number of positions on the account
       double         total_volumes;          // Total volume of orders and positions on the account
@@ -29,18 +31,30 @@ private:
    MqlDataCollection m_struct_curr_market;   // Current data on market orders and positions on the account
    MqlDataCollection m_struct_prev_market;   // Previous data on market orders and positions on the account
    CArrayObj         m_list_all_orders;      // List of pending orders and positions on the account
+   COrder            m_order_instance;       // Order object for searching by property
    bool              m_is_trade_event;       // Trading event flag
    bool              m_is_change_volume;     // Total volume change flag
    double            m_change_volume_value;  // Total volume change value
+   int               m_new_market;           // Number of new market orders
    int               m_new_positions;        // Number of new positions
    int               m_new_pendings;         // Number of new pending orders
    //--- Save the current values of the account data status as previous ones
-   void              SavePrevValues(void)             { this.m_struct_prev_market=this.m_struct_curr_market;   }
+   void              SavePrevValues(void)                                                                { this.m_struct_prev_market=this.m_struct_curr_market;                  }
 public:
-   //--- Return the number of (1) new pending orders, (2) new positions, (3) occurred trading event flag
-   int               NewOrders(void)    const         { return this.m_new_pendings;                            }
-   int               NewPosition(void)  const         { return this.m_new_positions;                           }
-   bool              IsTradeEvent(void) const         { return this.m_is_trade_event;                          }
+   //--- Return the list of all pending orders and open positions
+   CArrayObj*        GetList(void)                                                                       { return &m_list_all_orders;                                            }
+   //--- Return the list of orders and positions with an open time from begin_time to end_time
+   CArrayObj*        GetListByTime(const datetime begin_time=0,const datetime end_time=0);
+   //--- Return the list of orders and positions by selected (1) double, (2) integer and (3) string property fitting a compared condition
+   CArrayObj*        GetList(ENUM_ORDER_PROP_DOUBLE property,double value,ENUM_COMPARER_TYPE mode=EQUAL) { return CSelect::ByOrderProperty(this.GetList(),property,value,mode);  }
+   CArrayObj*        GetList(ENUM_ORDER_PROP_INTEGER property,long value,ENUM_COMPARER_TYPE mode=EQUAL)  { return CSelect::ByOrderProperty(this.GetList(),property,value,mode);  }
+   CArrayObj*        GetList(ENUM_ORDER_PROP_STRING property,string value,ENUM_COMPARER_TYPE mode=EQUAL) { return CSelect::ByOrderProperty(this.GetList(),property,value,mode);  }
+   //--- Return the number of (1) new market orders, (2) new pending orders, (3) new positions, (4) occurred trading event flag and (5) changed volume
+   int               NewMarketOrders(void)                                                         const { return this.m_new_market;                                             }
+   int               NewPendingOrders(void)                                                        const { return this.m_new_pendings;                                           }
+   int               NewPositions(void)                                                            const { return this.m_new_positions;                                          }
+   bool              IsTradeEvent(void)                                                            const { return this.m_is_trade_event;                                         }
+   double            ChangedVolumeValue(void)                                                      const { return this.m_change_volume_value;                                    }
    //--- Constructor
                      CMarketCollection(void);
    //--- Update the list of pending orders and positions
@@ -51,7 +65,8 @@ public:
 //+------------------------------------------------------------------+
 CMarketCollection::CMarketCollection(void) : m_is_trade_event(false),m_is_change_volume(false),m_change_volume_value(0)
   {
-   m_list_all_orders.Sort(SORT_BY_ORDER_TIME_OPEN);
+   this.m_list_all_orders.Sort(SORT_BY_ORDER_TIME_OPEN);
+   this.m_list_all_orders.Clear();
    ::ZeroMemory(this.m_struct_prev_market);
    this.m_struct_prev_market.hash_sum_acc=WRONG_VALUE;
   }
@@ -135,18 +150,37 @@ void CMarketCollection::Refresh(void)
      {
       ulong ticket=::OrderGetTicket(i);
       if(ticket==0) continue;
-      CMarketPending *order=new CMarketPending(ticket);
-      if(order==NULL) continue;
-      if(this.m_list_all_orders.InsertSort(order))
+      ENUM_ORDER_TYPE type=(ENUM_ORDER_TYPE)::OrderGetInteger(ORDER_TYPE);
+      if(type==ORDER_TYPE_BUY || type==ORDER_TYPE_SELL)
         {
-         this.m_struct_curr_market.hash_sum_acc+=(long)ticket;
-         this.m_struct_curr_market.total_volumes+=::OrderGetDouble(ORDER_VOLUME_INITIAL);
-         this.m_struct_curr_market.total_pending++;
+         CMarketOrder *order=new CMarketOrder(ticket);
+         if(order==NULL) continue;
+         if(this.m_list_all_orders.InsertSort(order))
+           {
+            this.m_struct_curr_market.hash_sum_acc+=(long)ticket;
+            this.m_struct_curr_market.total_market++;
+           }
+         else
+           {
+            ::Print(DFUN,TextByLanguage("Не удалось добавить маркет-ордер в список","Failed to add market order to list"));
+            delete order;
+           }
         }
       else
         {
-         ::Print(DFUN,TextByLanguage("Не удалось добавить ордер в список","Failed to add order to list"));
-         delete order;
+         CMarketPending *order=new CMarketPending(ticket);
+         if(order==NULL) continue;
+         if(this.m_list_all_orders.InsertSort(order))
+           {
+            this.m_struct_curr_market.hash_sum_acc+=(long)ticket;
+            this.m_struct_curr_market.total_volumes+=::OrderGetDouble(ORDER_VOLUME_INITIAL);
+            this.m_struct_curr_market.total_pending++;
+           }
+         else
+           {
+            ::Print(DFUN,TextByLanguage("Не удалось добавить отложенный ордер в список","Failed to add pending order to list"));
+            delete order;
+           }
         }
      }
 #endif 
@@ -158,6 +192,7 @@ void CMarketCollection::Refresh(void)
 //--- If the hash sum of all orders and positions changed
    if(this.m_struct_curr_market.hash_sum_acc!=this.m_struct_prev_market.hash_sum_acc)
      {
+      this.m_new_market=this.m_struct_curr_market.total_market-this.m_struct_prev_market.total_market;
       this.m_new_pendings=this.m_struct_curr_market.total_pending-this.m_struct_prev_market.total_pending;
       this.m_new_positions=this.m_struct_curr_market.total_positions-this.m_struct_prev_market.total_positions;
       this.m_change_volume_value=::NormalizeDouble(this.m_struct_curr_market.total_volumes-this.m_struct_prev_market.total_volumes,4);
@@ -165,5 +200,32 @@ void CMarketCollection::Refresh(void)
       this.m_is_trade_event=true;
       this.SavePrevValues();
      }
+  }
+//+---------------------------------------------------------------------+
+//| Select market orders or positions from the collection with the time |
+//| from begin_time to end_time                                         |
+//+---------------------------------------------------------------------+
+CArrayObj* CMarketCollection::GetListByTime(const datetime begin_time=0,const datetime end_time=0)
+  {
+   CArrayObj* list=new CArrayObj();
+   if(list==NULL)
+     {
+      ::Print(DFUN,TextByLanguage("Ошибка создания временного списка","Error creating temporary list"));
+      return NULL;
+     }
+   datetime begin=begin_time,end=(end_time==0 ? END_TIME : end_time);
+   list.FreeMode(false);
+   ListStorage.Add(list);
+   m_order_instance.SetProperty(ORDER_PROP_TIME_OPEN,begin);
+   int index_begin=m_list_all_orders.SearchGreatOrEqual(&m_order_instance);
+   if(index_begin==WRONG_VALUE)
+      return list;
+   m_order_instance.SetProperty(ORDER_PROP_TIME_OPEN,end);
+   int index_end=m_list_all_orders.SearchLessOrEqual(&m_order_instance);
+   if(index_end==WRONG_VALUE)
+      return list;
+   for(int i=index_begin; i<=index_end; i++)
+      list.Add(m_list_all_orders.At(i));
+   return list;
   }
 //+------------------------------------------------------------------+

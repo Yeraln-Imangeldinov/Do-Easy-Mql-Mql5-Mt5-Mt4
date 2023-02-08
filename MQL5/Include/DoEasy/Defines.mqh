@@ -49,7 +49,8 @@ enum ENUM_SELECT_BY_TIME
 //+------------------------------------------------------------------+
 enum ENUM_ORDER_STATUS
   {
-   ORDER_STATUS_MARKET_PENDING,                             // Current pending order
+   ORDER_STATUS_MARKET_PENDING,                             // Market pending order
+   ORDER_STATUS_MARKET_ORDER,                               // Market order
    ORDER_STATUS_MARKET_POSITION,                            // Market position
    ORDER_STATUS_HISTORY_ORDER,                              // History market order
    ORDER_STATUS_HISTORY_PENDING,                            // Removed pending order
@@ -96,7 +97,7 @@ enum ENUM_ORDER_PROP_DOUBLE
    ORDER_PROP_PRICE_OPEN = ORDER_PROP_INTEGER_TOTAL,        // Open price (MQL5 deal price)
    ORDER_PROP_PRICE_CLOSE,                                  // Close price
    ORDER_PROP_SL,                                           // StopLoss price
-   ORDER_PROP_TP,                                           // TaleProfit price
+   ORDER_PROP_TP,                                           // TakeProfit price
    ORDER_PROP_PROFIT,                                       // Profit
    ORDER_PROP_COMMISSION,                                   // Commission
    ORDER_PROP_SWAP,                                         // Swap
@@ -162,5 +163,68 @@ enum ENUM_SORT_ORDERS_MODE
    SORT_BY_ORDER_SYMBOL          =  FIRST_STR_PROP,         // Sort by symbol
    SORT_BY_ORDER_COMMENT         =  FIRST_STR_PROP+1,       // Sort by comment
    SORT_BY_ORDER_EXT_ID          =  FIRST_STR_PROP+2        // Sort by order ID in an external trading system
+  };
+//+------------------------------------------------------------------+
+//| Data for working with an account                                 |
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| List of trading event flags on the account                       |
+//+------------------------------------------------------------------+
+enum ENUM_TRADE_EVENT_FLAGS
+  {
+   TRADE_EVENT_FLAG_NO_EVENT        =  0,                   // No event
+   TRADE_EVENT_FLAG_ORDER_PLASED    =  1,                   // Pending order placed
+   TRADE_EVENT_FLAG_ORDER_REMOVED   =  2,                   // Pending order removed
+   TRADE_EVENT_FLAG_ORDER_ACTIVATED =  4,                   // Pending order activated by price
+   TRADE_EVENT_FLAG_POSITION_OPENED =  8,                   // Position opened
+   TRADE_EVENT_FLAG_POSITION_CLOSED =  16,                  // Position closed
+   TRADE_EVENT_FLAG_ACCOUNT_BALANCE =  32,                  // Balance operation (clarified by a deal type)
+   TRADE_EVENT_FLAG_PARTIAL         =  64,                  // Partial execution
+   TRADE_EVENT_FLAG_BY_POS          =  128,                 // Executed by opposite position
+   TRADE_EVENT_FLAG_SL              =  256,                 // Executed by StopLoss
+   TRADE_EVENT_FLAG_TP              =  512                  // Executed by TakeProfit
+  };
+//+------------------------------------------------------------------+
+//| List of possible trading events on the account                   |
+//+------------------------------------------------------------------+
+enum ENUM_TRADE_EVENT
+  {
+   TRADE_EVENT_NO_EVENT,                                    // No trading event
+   TRADE_EVENT_PENDING_ORDER_PLASED,                        // Pending order placed
+   TRADE_EVENT_PENDING_ORDER_REMOVED,                       // Pending order removed
+//--- enumeration members matching the ENUM_DEAL_TYPE enumeration members
+   TRADE_EVENT_ACCOUNT_CREDIT,                              // Charging credit
+   TRADE_EVENT_ACCOUNT_CHARGE,                              // Additional charges
+   TRADE_EVENT_ACCOUNT_CORRECTION,                          // Correcting entry
+   TRADE_EVENT_ACCOUNT_BONUS,                               // Charging bonuses
+   TRADE_EVENT_ACCOUNT_COMISSION,                           // Additional commissions
+   TRADE_EVENT_ACCOUNT_COMISSION_DAILY,                     // Commission charged at the end of a day
+   TRADE_EVENT_ACCOUNT_COMISSION_MONTHLY,                   // Commission charged at the end of a month
+   TRADE_EVENT_ACCOUNT_COMISSION_AGENT_DAILY,               // Agent commission charged at the end of a trading day
+   TRADE_EVENT_ACCOUNT_COMISSION_AGENT_MONTHLY,             // Agent commission charged at the end of a month
+   TRADE_EVENT_ACCOUNT_INTEREST,                            // Accrual of interest on free funds
+   TRADE_EVENT_BUY_CANCELLED,                               // Canceled buy deal
+   TRADE_EVENT_SELL_CANCELLED,                              // Canceled sell deal
+   TRADE_EVENT_DIVIDENT,                                    // Accrual of dividends
+   TRADE_EVENT_DIVIDENT_FRANKED,                            // Accrual of franked dividend
+   TRADE_EVENT_TAX,                                         // Tax accrual
+//--- members of enumeration related to the DEAL_TYPE_BALANCE deal type from the ENUM_DEAL_TYPE enumeration
+   TRADE_EVENT_ACCOUNT_BALANCE_REFILL,                      // Replenishing account balance
+   TRADE_EVENT_ACCOUNT_BALANCE_WITHDRAWAL,                  // Withdrawing funds from an account
+//---
+   TRADE_EVENT_PENDING_ORDER_ACTIVATED,                     // Pending order activated by price
+   TRADE_EVENT_PENDING_ORDER_ACTIVATED_PARTIAL,             // Pending order partially activated by price
+   TRADE_EVENT_POSITION_OPENED,                             // Position opened
+   TRADE_EVENT_POSITION_OPENED_PARTIAL,                     // Position opened partially
+   TRADE_EVENT_POSITION_CLOSED,                             // Position closed
+   TRADE_EVENT_POSITION_CLOSED_PARTIAL,                     // Position closed partially
+   TRADE_EVENT_POSITION_CLOSED_BY_POS,                      // Position closed by an opposite one
+   TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_POS,              // Position partially closed by an opposite one
+   TRADE_EVENT_POSITION_CLOSED_BY_SL,                       // Position closed by StopLoss
+   TRADE_EVENT_POSITION_CLOSED_BY_TP,                       // Position closed by TakeProfit
+   TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_SL,               // Position closed partially by StopLoss
+   TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_TP,               // Position closed partially by TakeProfit
+   TRADE_EVENT_POSITION_REVERSED,                           // Position reversal (netting)
+   TRADE_EVENT_POSITION_VOLUME_ADD                          // Added volume to position (netting)
   };
 //+------------------------------------------------------------------+

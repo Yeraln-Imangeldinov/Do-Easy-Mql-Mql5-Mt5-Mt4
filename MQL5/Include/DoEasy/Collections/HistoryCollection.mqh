@@ -21,7 +21,6 @@ class CHistoryCollection
   {
 private:
    CArrayObj         m_list_all_orders;      // List of all historical orders and deals
-   CArrayObj         m_list_of_events;       // Event queue list
    COrder            m_order_instance;       // Order object for searching by property
    bool              m_is_trade_event;       // Trading event flag
    int               m_index_order;          // Index of the last order added to the collection from the terminal history list (MQL4, MQL5)
@@ -52,11 +51,11 @@ public:
 //+------------------------------------------------------------------+
 CHistoryCollection::CHistoryCollection(void) : m_index_deal(0),m_delta_deal(0),m_index_order(0),m_delta_order(0),m_is_trade_event(false)
   {
-   this.m_list_all_orders.Sort(SORT_BY_ORDER_TIME_CLOSE);
-   this.m_list_of_events.Sort();
+   this.m_list_all_orders.Sort(#ifdef __MQL5__ SORT_BY_ORDER_TIME_OPEN #else SORT_BY_ORDER_TIME_CLOSE #endif );
+   this.m_list_all_orders.Clear();
   }
 //+------------------------------------------------------------------+
-//| Update the list of orders                                        |
+//| Update the list of orders and deals                              |
 //+------------------------------------------------------------------+
 void CHistoryCollection::Refresh(void)
   {
@@ -104,7 +103,7 @@ void CHistoryCollection::Refresh(void)
       ulong order_ticket=::HistoryOrderGetTicket(i);
       if(order_ticket==0) continue;
       ENUM_ORDER_TYPE type=(ENUM_ORDER_TYPE)::HistoryOrderGetInteger(order_ticket,ORDER_TYPE);
-      if(type==ORDER_TYPE_BUY || type==ORDER_TYPE_SELL)
+      if(type==ORDER_TYPE_BUY || type==ORDER_TYPE_SELL || type==ORDER_TYPE_CLOSE_BY)
         {
          CHistoryOrder *order=new CHistoryOrder(order_ticket);
          if(order==NULL) continue;

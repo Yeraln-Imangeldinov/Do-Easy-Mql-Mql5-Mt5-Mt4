@@ -270,6 +270,7 @@ long COrder::OrderMagicNumber() const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetInteger(POSITION_MAGIC);           break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetInteger(ORDER_MAGIC);                 break;
       case ORDER_STATUS_DEAL              : res=::HistoryDealGetInteger(m_ticket,DEAL_MAGIC);   break;
       case ORDER_STATUS_HISTORY_PENDING   :
@@ -291,6 +292,7 @@ long COrder::OrderTicket(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   :
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    :
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     :
@@ -336,6 +338,7 @@ long COrder::OrderPositionID(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetInteger(POSITION_IDENTIFIER);            break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetInteger(ORDER_POSITION_ID);                 break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetInteger(m_ticket,ORDER_POSITION_ID); break;
@@ -356,6 +359,7 @@ long COrder::OrderPositionByID(void) const
    long res=0;
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetInteger(ORDER_POSITION_BY_ID);                 break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetInteger(m_ticket,ORDER_POSITION_BY_ID); break;
@@ -376,6 +380,7 @@ long COrder::OrderOpenTimeMSC(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetInteger(POSITION_TIME_MSC);                 break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetInteger(ORDER_TIME_SETUP_MSC);                 break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetInteger(m_ticket,ORDER_TIME_SETUP_MSC); break;
@@ -416,6 +421,7 @@ long COrder::OrderType(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetInteger(POSITION_TYPE);            break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetInteger(ORDER_TYPE);                  break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetInteger(m_ticket,ORDER_TYPE);  break;
@@ -438,6 +444,7 @@ long COrder::OrderState(void) const
      {
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetInteger(m_ticket,ORDER_STATE); break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetInteger(ORDER_STATE);                 break;
       case ORDER_STATUS_MARKET_POSITION   : 
       case ORDER_STATUS_DEAL              : 
@@ -469,7 +476,7 @@ long COrder::OrderTypeByDirection(void) const
          ORDER_TYPE_SELL
         );
      }
-   if(status==ORDER_STATUS_HISTORY_ORDER)
+   if(status==ORDER_STATUS_MARKET_ORDER || status==ORDER_STATUS_HISTORY_ORDER)
      {
       return this.OrderType();
      }
@@ -486,6 +493,7 @@ long COrder::OrderTypeFilling(void) const
    long res=0;
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetInteger(ORDER_TYPE_FILLING);                break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetInteger(m_ticket,ORDER_TYPE_FILLING);break;
@@ -505,6 +513,7 @@ long COrder::OrderTypeTime(void) const
    long res=0;
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetInteger(ORDER_TYPE_TIME);                break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetInteger(m_ticket,ORDER_TYPE_TIME);break;
@@ -530,6 +539,7 @@ long COrder::OrderReason(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetInteger(POSITION_REASON);          break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetInteger(ORDER_REASON);                break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetInteger(m_ticket,ORDER_REASON);break;
@@ -551,6 +561,7 @@ long COrder::DealOrder(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetInteger(POSITION_IDENTIFIER);            break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetInteger(ORDER_POSITION_ID);                 break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetInteger(m_ticket,ORDER_POSITION_ID); break;
@@ -587,13 +598,14 @@ bool COrder::OrderCloseByStopLoss(void) const
 #else 
    return
      (
+      this.Status()==ORDER_STATUS_MARKET_ORDER  ? this.OrderReason()==ORDER_REASON_SL :
       this.Status()==ORDER_STATUS_HISTORY_ORDER ? this.OrderReason()==ORDER_REASON_SL : 
       this.Status()==ORDER_STATUS_DEAL ? this.OrderReason()==DEAL_REASON_SL : false
      );
 #endif 
   }
 //+------------------------------------------------------------------+
-//| Return the flag of closing a position by TakeProfit              |
+//| Return the flag of closing position by TakeProfit                |
 //+------------------------------------------------------------------+
 bool COrder::OrderCloseByTakeProfit(void) const
   {
@@ -602,6 +614,7 @@ bool COrder::OrderCloseByTakeProfit(void) const
 #else 
    return
      (
+      this.Status()==ORDER_STATUS_MARKET_ORDER  ? this.OrderReason()==ORDER_REASON_TP : 
       this.Status()==ORDER_STATUS_HISTORY_ORDER ? this.OrderReason()==ORDER_REASON_TP : 
       this.Status()==ORDER_STATUS_DEAL ? this.OrderReason()==DEAL_REASON_TP : false
      );
@@ -619,6 +632,7 @@ datetime COrder::OrderOpenTime(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=(datetime)::PositionGetInteger(POSITION_TIME);                 break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=(datetime)::OrderGetInteger(ORDER_TIME_SETUP);                 break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=(datetime)::HistoryOrderGetInteger(m_ticket,ORDER_TIME_SETUP); break;
@@ -658,6 +672,7 @@ datetime COrder::OrderExpiration(void) const
    datetime res=0;
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=(datetime)::OrderGetInteger(ORDER_TIME_EXPIRATION);                  break;
       case ORDER_STATUS_HISTORY_PENDING   : res=(datetime)::HistoryOrderGetInteger(m_ticket,ORDER_TIME_EXPIRATION);  break;
       default                             : res=0;                                                                   break;
@@ -714,6 +729,7 @@ double COrder::OrderOpenPrice(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetDouble(POSITION_PRICE_OPEN);          break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetDouble(ORDER_PRICE_OPEN);                break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetDouble(m_ticket,ORDER_PRICE_OPEN);break;
@@ -807,6 +823,7 @@ double COrder::OrderVolume(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetDouble(POSITION_VOLUME);                    break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetDouble(ORDER_VOLUME_INITIAL);                  break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetDouble(m_ticket,ORDER_VOLUME_INITIAL);  break;
@@ -827,6 +844,7 @@ double COrder::OrderVolumeCurrent(void) const
    double res=0;
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetDouble(ORDER_VOLUME_CURRENT);                  break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetDouble(m_ticket,ORDER_VOLUME_CURRENT);  break;
@@ -847,6 +865,7 @@ double COrder::OrderStopLoss(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetDouble(POSITION_SL);            break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetDouble(ORDER_SL);                  break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetDouble(m_ticket,ORDER_SL);  break;
@@ -867,6 +886,7 @@ double COrder::OrderTakeProfit(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetDouble(POSITION_TP);            break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetDouble(ORDER_TP);                  break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetDouble(m_ticket,ORDER_TP);  break;
@@ -887,6 +907,7 @@ double COrder::OrderPriceStopLimit(void) const
    double res=0;
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetDouble(ORDER_PRICE_STOPLIMIT);                 break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetDouble(m_ticket,ORDER_PRICE_STOPLIMIT); break;
@@ -910,6 +931,7 @@ string COrder::OrderSymbol(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetString(POSITION_SYMBOL);           break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetString(ORDER_SYMBOL);                 break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetString(m_ticket,ORDER_SYMBOL); break;
@@ -931,6 +953,7 @@ string COrder::OrderComment(void) const
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
       case ORDER_STATUS_MARKET_POSITION   : res=::PositionGetString(POSITION_COMMENT);          break;
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetString(ORDER_COMMENT);                break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetString(m_ticket,ORDER_COMMENT);break;
@@ -951,6 +974,7 @@ string COrder::OrderExternalID(void) const
    string res="";
    switch((ENUM_ORDER_STATUS)this.GetProperty(ORDER_PROP_STATUS))
      {
+      case ORDER_STATUS_MARKET_ORDER      :
       case ORDER_STATUS_MARKET_PENDING    : res=::OrderGetString(ORDER_EXTERNAL_ID);                  break;
       case ORDER_STATUS_HISTORY_PENDING   :
       case ORDER_STATUS_HISTORY_ORDER     : res=::HistoryOrderGetString(m_ticket,ORDER_EXTERNAL_ID);  break;
@@ -1006,6 +1030,7 @@ string COrder::GetReasonDescription(const long reason) const
             reason==POSITION_REASON_EXPERT   ?  TextByLanguage("Позиция открыта из советника или скрипта","Position opened from EA or script") : ""
            );
          break;
+      case ORDER_STATUS_MARKET_ORDER         :
       case ORDER_STATUS_MARKET_PENDING       :
       case ORDER_STATUS_HISTORY_PENDING      : 
       case ORDER_STATUS_HISTORY_ORDER        : 
@@ -1013,7 +1038,7 @@ string COrder::GetReasonDescription(const long reason) const
            (
             reason==ORDER_REASON_CLIENT      ?  TextByLanguage("Ордер выставлен из десктопного терминала","Order set from desktop terminal") :
             reason==ORDER_REASON_MOBILE      ?  TextByLanguage("Ордер выставлен из мобильного приложения","Order set from mobile app") :
-            reason==ORDER_REASON_WEB         ?  TextByLanguage("Ордер выставлен из веб-платформы","Order set from web platform") :
+            reason==ORDER_REASON_WEB         ?  TextByLanguage("Ордер выставлен из веб-платформы","Oder set from web platform") :
             reason==ORDER_REASON_EXPERT      ?  TextByLanguage("Ордер выставлен советником или скриптом","Order set from EA or script") :
             reason==ORDER_REASON_SL          ?  TextByLanguage("Срабатывание StopLoss","Due to StopLoss") :
             reason==ORDER_REASON_TP          ?  TextByLanguage("Срабатывание TakeProfit","Due to TakeProfit") :
@@ -1058,8 +1083,11 @@ string COrder::GetEntryDescription(const long deal_entry) const
       case ORDER_STATUS_HISTORY_PENDING   : 
          res=TextByLanguage("Свойство не поддерживается у отложенного ордера","Property not supported for pending order"); 
          break;
+      case ORDER_STATUS_MARKET_ORDER      :
+         res=TextByLanguage("Свойство не поддерживается у маркет-ордера","Property not supported for market order"); 
+         break;
       case ORDER_STATUS_HISTORY_ORDER     : 
-         res=TextByLanguage("Свойство не поддерживается у исторического ордера","Property not supported for historical order"); 
+         res=TextByLanguage("Свойство не поддерживается у исторического маркет-ордера","Property not supported for historical market order"); 
          break;
       case ORDER_STATUS_DEAL              : 
          res=
@@ -1093,8 +1121,11 @@ string COrder::GetTypeDealDescription(const long deal_type) const
       case ORDER_STATUS_HISTORY_PENDING   : 
          res=TextByLanguage("Свойство не поддерживается у отложенного ордера","Property not supported for pending order"); 
          break;
+      case ORDER_STATUS_MARKET_ORDER      :
+         res=TextByLanguage("Свойство не поддерживается у маркет-ордера","Property not supported for market order"); 
+         break;
       case ORDER_STATUS_HISTORY_ORDER     : 
-         res=TextByLanguage("Свойство не поддерживается у исторического ордера","Property not supported for historical order"); 
+         res=TextByLanguage("Свойство не поддерживается у исторического маркет-ордера","Property not supported for historical market order"); 
          break;
       case ORDER_STATUS_DEAL              : 
          res=
@@ -1135,14 +1166,15 @@ string COrder::StatusDescription(void) const
      (
       status==ORDER_STATUS_BALANCE           ?  TextByLanguage("Балансная операция","Balance operation") :
       status==ORDER_STATUS_CREDIT            ?  TextByLanguage("Кредитная операция","Credit operation") :
-      status==ORDER_STATUS_HISTORY_ORDER     || status==ORDER_STATUS_HISTORY_PENDING                     ?  
-      (
-       type>ORDER_TYPE_SELL ? TextByLanguage("Отложенный ордер","Pending order")                      :
-       TextByLanguage("Ордер на ","The order to ")+(type==ORDER_TYPE_BUY ? TextByLanguage("покупку","buy") : TextByLanguage("продажу","sell"))
-      )                                                                                                  :
+      status==ORDER_STATUS_MARKET_ORDER || status==ORDER_STATUS_HISTORY_ORDER ?  
+         (
+          type==ORDER_TYPE_CLOSE_BY ? TextByLanguage("Закрывающий ордер","Order for closing by")         :
+          TextByLanguage("Ордер на ","The order to ")+(type==ORDER_TYPE_BUY ? TextByLanguage("покупку","buy") : TextByLanguage("продажу","sell"))
+         ) :
       status==ORDER_STATUS_DEAL              ?  TextByLanguage("Сделка","Deal")                          :
       status==ORDER_STATUS_MARKET_POSITION   ?  TextByLanguage("Позиция","Active position")              :
       status==ORDER_STATUS_MARKET_PENDING    ?  TextByLanguage("Установленный отложенный ордер","Active pending order") :
+      status==ORDER_STATUS_HISTORY_PENDING   ?  TextByLanguage("Отложенный ордер","Pending order") :
       ""
      );
   }
@@ -1167,6 +1199,7 @@ string COrder::TypeDescription(void) const
       #else 
       case ORDER_TYPE_BUY_STOP_LIMIT   :  return "Buy Stop Limit";
       case ORDER_TYPE_SELL_STOP_LIMIT  :  return "Sell Stop Limit";
+      case ORDER_TYPE_CLOSE_BY         :  return TextByLanguage("Закрывающий ордер","Order for closing by");
       #endif 
       default                          :  return TextByLanguage("Неизвестный тип","Unknown type");
      }

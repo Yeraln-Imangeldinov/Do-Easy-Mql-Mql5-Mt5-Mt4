@@ -34,17 +34,16 @@ bool CHistoryDeal::SupportProperty(ENUM_ORDER_PROP_INTEGER property)
       property==ORDER_PROP_TIME_UPDATE       ||
       property==ORDER_PROP_TIME_UPDATE_MSC   ||
       property==ORDER_PROP_STATE             ||
+      property==ORDER_PROP_TICKET_FROM       ||
+      property==ORDER_PROP_TICKET_TO         ||
+      property==ORDER_PROP_TIME_CLOSE        ||
+      property==ORDER_PROP_TIME_CLOSE_MSC    ||
       (
        this.OrderType()==DEAL_TYPE_BALANCE &&
        (
         property==ORDER_PROP_POSITION_ID     ||
-        property==ORDER_PROP_POSITION_BY_ID  ||
-        property==ORDER_PROP_TICKET_FROM     ||
-        property==ORDER_PROP_TICKET_TO       ||
         property==ORDER_PROP_DEAL_ORDER      ||
         property==ORDER_PROP_MAGIC           ||
-        property==ORDER_PROP_TIME_CLOSE      ||
-        property==ORDER_PROP_TIME_CLOSE_MSC  ||
         property==ORDER_PROP_CLOSE_BY_SL     ||
         property==ORDER_PROP_CLOSE_BY_TP
        )

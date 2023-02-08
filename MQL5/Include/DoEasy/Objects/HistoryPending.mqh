@@ -51,6 +51,9 @@ bool CHistoryPending::SupportProperty(ENUM_ORDER_PROP_DOUBLE property)
       property==ORDER_PROP_PROFIT      ||
       property==ORDER_PROP_PROFIT_FULL ||
       property==ORDER_PROP_PRICE_CLOSE
+      #ifdef __MQL5__                  ||
+      property==ORDER_PROP_PRICE_STOP_LIMIT
+      #endif 
      ) return false;
    return true;
   }
