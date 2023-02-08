@@ -51,6 +51,36 @@ enum ENUM_SELECT_BY_TIME
   };
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
+//| List of flags of possible order and position change options      |
+//+------------------------------------------------------------------+
+enum ENUM_CHANGE_TYPE_FLAGS
+  {
+   CHANGE_TYPE_FLAG_NO_CHANGE    =  0,                      // No changes
+   CHANGE_TYPE_FLAG_TYPE         =  1,                      // Order type change
+   CHANGE_TYPE_FLAG_PRICE        =  2,                      // Price change
+   CHANGE_TYPE_FLAG_STOP         =  4,                      // StopLoss change
+   CHANGE_TYPE_FLAG_TAKE         =  8,                      // TakeProfit change
+   CHANGE_TYPE_FLAG_ORDER        =  16                      // Order properties change flag
+  };
+//+------------------------------------------------------------------+
+//| Possible order and position change options                       |
+//+------------------------------------------------------------------+
+enum ENUM_CHANGE_TYPE
+  {
+   CHANGE_TYPE_NO_CHANGE,                                   // No changes
+   CHANGE_TYPE_ORDER_TYPE,                                  // Order type change
+   CHANGE_TYPE_ORDER_PRICE,                                 // Order price change
+   CHANGE_TYPE_ORDER_PRICE_STOP_LOSS,                       // Order and StopLoss price change 
+   CHANGE_TYPE_ORDER_PRICE_TAKE_PROFIT,                     // Order and TakeProfit price change
+   CHANGE_TYPE_ORDER_PRICE_STOP_LOSS_TAKE_PROFIT,           // Order, StopLoss and TakeProfit price change
+   CHANGE_TYPE_ORDER_STOP_LOSS_TAKE_PROFIT,                 // StopLoss and TakeProfit change
+   CHANGE_TYPE_ORDER_STOP_LOSS,                             // Order's StopLoss change
+   CHANGE_TYPE_ORDER_TAKE_PROFIT,                           // Order's TakeProfit change
+   CHANGE_TYPE_POSITION_STOP_LOSS_TAKE_PROFIT,              // Change position's StopLoss and TakeProfit
+   CHANGE_TYPE_POSITION_STOP_LOSS,                          // Change position's StopLoss
+   CHANGE_TYPE_POSITION_TAKE_PROFIT,                        // Change position's TakeProfit
+  };
+//+------------------------------------------------------------------+
 //| Data for working with orders                                     |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
@@ -248,7 +278,15 @@ enum ENUM_TRADE_EVENT
    TRADE_EVENT_POSITION_CLOSED_PARTIAL,                     // Position closed partially
    TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_POS,              // Position partially closed by an opposite one
    TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_SL,               // Position closed partially by StopLoss
-   TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_TP                // Position closed partially by TakeProfit
+   TRADE_EVENT_POSITION_CLOSED_PARTIAL_BY_TP,               // Position closed partially by TakeProfit
+   TRADE_EVENT_TRIGGERED_STOP_LIMIT_ORDER,                  // StopLimit order activation
+   TRADE_EVENT_MODIFY_ORDER_PRICE,                          // Changing order price
+   TRADE_EVENT_MODIFY_ORDER_PRICE_STOP_LOSS,                // Changing order and StopLoss price 
+   TRADE_EVENT_MODIFY_ORDER_PRICE_TAKE_PROFIT,              // Changing order and TakeProfit price
+   TRADE_EVENT_MODIFY_ORDER_PRICE_STOP_LOSS_TAKE_PROFIT,    // Changing order, StopLoss and TakeProfit price
+   TRADE_EVENT_MODIFY_ORDER_STOP_LOSS_TAKE_PROFIT,          // Changing order's StopLoss and TakeProfit price
+   TRADE_EVENT_MODIFY_POSITION_STOP_LOSS,                   // Changing position StopLoss
+   TRADE_EVENT_MODIFY_POSITION_TAKE_PROFIT,                 // Changing position TakeProfit
   };
 //+------------------------------------------------------------------+
 //| Event status                                                     |
@@ -273,6 +311,7 @@ enum ENUM_EVENT_REASON
    //--- All constants related to a position reversal should be located in the above list
    EVENT_REASON_ACTIVATED_PENDING,                          // Pending order activation
    EVENT_REASON_ACTIVATED_PENDING_PARTIALLY,                // Pending order partial activation
+   EVENT_REASON_STOPLIMIT_TRIGGERED,                        // StopLimit order activation
    EVENT_REASON_CANCEL,                                     // Cancelation
    EVENT_REASON_EXPIRED,                                    // Order expiration
    EVENT_REASON_DONE,                                       // Request executed in full
@@ -381,11 +420,11 @@ enum ENUM_SORT_EVENTS_MODE
    SORT_BY_EVENT_REASON_EVENT             = 3,                       // Sort by event reason (from the ENUM_EVENT_REASON enumeration)
    SORT_BY_EVENT_TYPE_DEAL_EVENT          = 4,                       // Sort by deal event type
    SORT_BY_EVENT_TICKET_DEAL_EVENT        = 5,                       // Sort by deal event ticket
-   SORT_BY_EVENT_TYPE_ORDER_EVENT         = 6,                       // Sort by type of the order, based on which a deal event is opened (the last position order)
-   SORT_BY_EVENT_TICKET_ORDER_EVENT       = 7,                       // Sort by a ticket of the order, based on which a deal event is opened (the last position order)
-   SORT_BY_EVENT_TIME_ORDER_POSITION      = 8,                       // Sort by time of the order, based on which a position deal is opened (the first position order)
-   SORT_BY_EVENT_TYPE_ORDER_POSITION      = 9,                       // Sort by type of the order, based on which a position deal is opened (the first position order)
-   SORT_BY_EVENT_TICKET_ORDER_POSITION    = 10,                      // Sort by a ticket of the order, based on which a position deal is opened (the first position order)
+   SORT_BY_EVENT_TYPE_ORDER_EVENT         = 6,                       // Sort by type of an order, based on which a deal event is opened (the last position order)
+   SORT_BY_EVENT_TICKET_ORDER_EVENT       = 7,                       // Sort by a ticket of an order, based on which a deal event is opened (the last position order)
+   SORT_BY_EVENT_TIME_ORDER_POSITION      = 8,                       // Sort by time of an order, based on which a position deal is opened (the first position order)
+   SORT_BY_EVENT_TYPE_ORDER_POSITION      = 9,                       // Sort by type of an order, based on which a position deal is opened (the first position order)
+   SORT_BY_EVENT_TICKET_ORDER_POSITION    = 10,                      // Sort by a ticket of an order, based on which a position deal is opened (the first position order)
    SORT_BY_EVENT_POSITION_ID              = 11,                      // Sort by position ID
    SORT_BY_EVENT_POSITION_BY_ID           = 12,                      // Sort by opposite position ID
    SORT_BY_EVENT_MAGIC_ORDER              = 13,                      // Sort by order/deal/position magic number
@@ -394,8 +433,8 @@ enum ENUM_SORT_EVENTS_MODE
    SORT_BY_EVENT_PRICE_EVENT              =  FIRST_EVN_DBL_PROP,     // Sort by a price an event occurred at
    SORT_BY_EVENT_PRICE_OPEN               =  FIRST_EVN_DBL_PROP+1,   // Sort by position open price
    SORT_BY_EVENT_PRICE_CLOSE              =  FIRST_EVN_DBL_PROP+2,   // Sort by position close price
-   SORT_BY_EVENT_PRICE_SL                 =  FIRST_EVN_DBL_PROP+3,   // Sort by position StopLoss price
-   SORT_BY_EVENT_PRICE_TP                 =  FIRST_EVN_DBL_PROP+4,   // Sort by position TakeProfit price
+   SORT_BY_EVENT_PRICE_SL                 =  FIRST_EVN_DBL_PROP+3,   // Sort by position's StopLoss price
+   SORT_BY_EVENT_PRICE_TP                 =  FIRST_EVN_DBL_PROP+4,   // Sort by position's TakeProfit price
    SORT_BY_EVENT_VOLUME_ORDER_INITIAL     =  FIRST_EVN_DBL_PROP+5,   // Sort by initial volume
    SORT_BY_EVENT_VOLUME_ORDER_EXECUTED    =  FIRST_EVN_DBL_PROP+6,   // Sort by the current volume
    SORT_BY_EVENT_VOLUME_ORDER_CURRENT     =  FIRST_EVN_DBL_PROP+7,   // Sort by remaining volume

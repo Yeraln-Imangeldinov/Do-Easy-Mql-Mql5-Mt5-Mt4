@@ -128,7 +128,7 @@ public:
    ENUM_ORDER_TYPE   TypeByDirection(void)                              const { return (ENUM_ORDER_TYPE)this.GetProperty(ORDER_PROP_DIRECTION); }
    
    //--- Return (1) open price, (2) close price, (3) profit, (4) commission, (5) swap, (6) volume, 
-   //--- (7) unexecuted volume (8) StopLoss and (9) TakeProfit, (10) StopLimit order price
+   //--- (7) unexecuted volume (8) StopLoss and (9) TakeProfit (10) StopLimit order price
    double            PriceOpen(void)                                    const { return this.GetProperty(ORDER_PROP_PRICE_OPEN);                 }
    double            PriceClose(void)                                   const { return this.GetProperty(ORDER_PROP_PRICE_CLOSE);                }
    double            Profit(void)                                       const { return this.GetProperty(ORDER_PROP_PROFIT);                     }
@@ -356,7 +356,7 @@ long COrder::OrderTicketTo(void) const
    return ticket;
   }
 //+------------------------------------------------------------------+
-//| Return the position ID                                           |
+//| Return position ID                                               |
 //+------------------------------------------------------------------+
 long COrder::OrderPositionID(void) const
   {
@@ -1247,7 +1247,7 @@ string COrder::DirectionDescription(void) const
          this.OrderType()==DEAL_TYPE_BALANCE ? 
            (
             this.OrderProfit()>0 ? TextByLanguage("Пополнение счёта","Account refilled") : 
-            TextByLanguage("Вывод средств","Withdrawal from account")
+            TextByLanguage("Вывод средств","Withdrawals from account")
            )                                          :
          this.OrderType()==DEAL_TYPE_BUY     ? "Buy"  : 
          this.OrderType()==DEAL_TYPE_SELL    ? "Sell" :

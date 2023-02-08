@@ -86,7 +86,7 @@ int OnInit()
 //--- create buttons
    if(!CreateButtons(InpButtShiftX,InpButtShiftY))
       return INIT_FAILED;
-//--- set trade parameters
+//--- setting trade parameters
    trade.SetDeviationInPoints(slippage);
    trade.SetExpertMagicNumber(magic_number);
    trade.SetTypeFillingBySymbol(Symbol());

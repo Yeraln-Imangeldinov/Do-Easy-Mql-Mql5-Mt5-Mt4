@@ -88,14 +88,14 @@ string CEventPositionClose::EventsMessage(void)
      (
       this.IsPresentEventFlag(TRADE_EVENT_FLAG_BY_POS)   ? 
       TextByLanguage(" встречным "," by opposite ")+this.SymbolCloseBy()+" "+
-      this.TypeOrderDealDescription()+" #"+(string)this.PositionByID()+(this.MagicCloseBy()> 0 ? "("+(string)this.MagicCloseBy()+" ]" : "")
+      this.TypeOrderDealDescription()+" #"+(string)this.PositionByID()+(this.MagicCloseBy()> 0 ? "("+(string)this.MagicCloseBy()+"]" : "")
                                                          : ""
      );
    //--- EURUSD: Closed 0.1 Sell #xx [0.2 SellLimit order #XX] at х.ххххх, sl х.ххххх, tp x.xxxxx, magic, profit xxxx
    string text=
      (
       this.Symbol()+" "+close+in_pos+this.TypePositionCurrentDescription()+" #"+(string)this.TicketPositionCurrent()+
-      opposite+" ["+vol_ord+" "+this.TypeOrderEventDescription()+" #"+(string)this.TicketOrderEvent()+" ]"+price+sl+tp+magic+profit
+      opposite+" ["+vol_ord+" "+this.TypeOrderEventDescription()+" #"+(string)this.TicketOrderEvent()+"]"+price+sl+tp+magic+profit
      );
    return head+text;
   }

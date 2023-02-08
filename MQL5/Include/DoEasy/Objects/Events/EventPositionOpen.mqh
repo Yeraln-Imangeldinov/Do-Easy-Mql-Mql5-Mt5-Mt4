@@ -90,7 +90,7 @@ string CEventPositionOpen::EventsMessage(void)
          this.Symbol()+" "+
          this.TypePositionPreviousDescription()+" #"+(string)this.TicketPositionPrevious()+
          TextByLanguage(" изменен на "," turned to ")+vol_pos+" "+this.TypePositionCurrentDescription()+" #"+(string)this.TicketPositionCurrent()+
-         " ["+vol_ord+" "+this.TypeOrderEventDescription()+" #"+(string)this.TicketOrderEvent()+" ]"+price+sl+tp+magic+profit
+         " ["+vol_ord+" "+this.TypeOrderEventDescription()+" #"+(string)this.TicketOrderEvent()+"]"+price+sl+tp+magic+profit
         );
      }
    else
@@ -104,7 +104,7 @@ string CEventPositionOpen::EventsMessage(void)
             this.Symbol()+" "+
             TextByLanguage("Добавлено ","Added ")+vol_ord+TextByLanguage(" к "," to ")+
             this.TypePositionCurrentDescription()+" #"+(string)this.TicketPositionCurrent()+
-            " ["+vol_ord+" "+this.TypeOrderEventDescription()+" #"+(string)this.TicketOrderEvent()+" ]"+price+magic
+            " ["+vol_ord+" "+this.TypeOrderEventDescription()+" #"+(string)this.TicketOrderEvent()+"]"+price+magic
            );
         }
       //--- Open a position
@@ -116,7 +116,7 @@ string CEventPositionOpen::EventsMessage(void)
             this.Symbol()+" "+
             TextByLanguage("Открыт ","Open ")+vol_pos+" "+
             this.TypePositionCurrentDescription()+" #"+(string)this.TicketPositionCurrent()+
-            " ["+vol_ord+" "+this.TypeOrderEventDescription()+" #"+(string)this.TicketOrderEvent()+" ]"+price+sl+tp+magic
+            " ["+vol_ord+" "+this.TypeOrderEventDescription()+" #"+(string)this.TicketOrderEvent()+"]"+price+sl+tp+magic
            );
         }
      }

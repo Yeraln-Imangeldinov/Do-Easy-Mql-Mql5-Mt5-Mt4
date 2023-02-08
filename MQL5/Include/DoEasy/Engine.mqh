@@ -182,9 +182,13 @@ void CEngine::TradeEventsControl(void)
    this.m_is_history_trade_event=this.m_history.IsTradeEvent();
 
 //--- If there is any event, send the lists, the flags and the number of new orders and deals to the event collection, and update it
-   if(this.m_is_history_trade_event || this.m_is_market_trade_event)
+   int change_total=0;
+   CArrayObj* list_changes=this.m_market.GetListChanges();
+   if(list_changes!=NULL)
+      change_total=list_changes.Total();
+   if(this.m_is_history_trade_event || this.m_is_market_trade_event || change_total>0)
      {
-      this.m_events.Refresh(this.m_history.GetList(),this.m_market.GetList(),
+      this.m_events.Refresh(this.m_history.GetList(),this.m_market.GetList(),list_changes,
                             this.m_is_history_trade_event,this.m_is_market_trade_event,
                             this.m_history.NewOrders(),this.m_market.NewPendingOrders(),
                             this.m_market.NewMarketOrders(),this.m_history.NewDeals());

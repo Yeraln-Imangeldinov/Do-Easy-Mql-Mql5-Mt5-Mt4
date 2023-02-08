@@ -30,8 +30,9 @@ private:
    ENUM_TRADE_EVENT  m_trade_event;                   // Account trading event
    CEvent            m_event_instance;                // Event object for searching by property
    
-//--- Create a trading event depending on the order status
+//--- Create a trading event depending on the (1) order status and (2) change type
    void              CreateNewEvent(COrder* order,CArrayObj* list_history,CArrayObj* list_market);
+   void              CreateNewEvent(COrderControl* order);
 //--- Create an event for a (1) hedging account, (2) netting account
    void              NewDealEventHedge(COrder* deal,CArrayObj* list_history,CArrayObj* list_market);
    void              NewDealEventNetto(COrder* deal,CArrayObj* list_history,CArrayObj* list_market);
@@ -62,7 +63,8 @@ private:
    COrder*           GetPositionByID(CArrayObj* list,const ulong position_id);
 //--- Return the flag of the event object presence in the event list
    bool              IsPresentEventInList(CEvent* compared_event);
-   
+//--- The handler of an existing order/position change event
+   void              OnChangeEvent(CArrayObj* list_changes,const int index);
 public:
 //--- Select events from the collection with time within the range from begin_time to end_time
    CArrayObj        *GetListByTime(const datetime begin_time=0,const datetime end_time=0);
@@ -75,6 +77,7 @@ public:
 //--- Update the list of events
    void              Refresh(CArrayObj* list_history,
                              CArrayObj* list_market,
+                             CArrayObj* list_changes,
                              const bool is_history_event,
                              const bool is_market_event,
                              const int  new_history_orders,
@@ -106,6 +109,7 @@ CEventsCollection::CEventsCollection(void) : m_trade_event(TRADE_EVENT_NO_EVENT)
 //+------------------------------------------------------------------+
 void CEventsCollection::Refresh(CArrayObj* list_history,
                                 CArrayObj* list_market,
+                                CArrayObj* list_changes,
                                 const bool is_history_event,
                                 const bool is_market_event,
                                 const int  new_history_orders,
@@ -119,6 +123,15 @@ void CEventsCollection::Refresh(CArrayObj* list_history,
 //--- If the event is in the market environment
    if(is_market_event)
      {
+      //--- if there was a change in the order properties
+      int total_changes=list_changes.Total();
+      if(total_changes>0)
+        {
+         for(int i=total_changes-1;i>=0;i--)
+           {
+            this.OnChangeEvent(list_changes,i);
+           }
+        }
       //--- if the number of placed pending orders increased
       if(new_market_pendings>0)
         {
@@ -185,7 +198,87 @@ void CEventsCollection::Refresh(CArrayObj* list_history,
            }
         }
      }
-  }  
+  }
+//+------------------------------------------------------------------+
+//| The handler of an existing order/position change event           |
+//+------------------------------------------------------------------+
+void CEventsCollection::OnChangeEvent(CArrayObj* list_changes,const int index)
+  {
+   COrderControl* order_changed=list_changes.Detach(index);
+   if(order_changed!=NULL)
+     {
+      if(order_changed.GetChangeType()==CHANGE_TYPE_ORDER_TYPE)
+        {
+         this.CreateNewEvent(order_changed);
+        }
+      delete order_changed;
+     }
+  }
+//+------------------------------------------------------------------+
+//| Create a trading event depending on the order change type        |
+//+------------------------------------------------------------------+
+void CEventsCollection::CreateNewEvent(COrderControl* order)
+  {
+   CEvent* event=NULL;
+//--- Pending StopLimit order placed
+   if(order.GetChangeType()==CHANGE_TYPE_ORDER_TYPE)
+     {
+      this.m_trade_event_code=TRADE_EVENT_FLAG_ORDER_PLASED;
+      event=new CEventOrderPlased(this.m_trade_event_code,order.Ticket());
+     }
+//--- 
+   if(event!=NULL)
+     {
+      event.SetProperty(EVENT_PROP_TIME_EVENT,order.Time());                        // Event time
+      event.SetProperty(EVENT_PROP_REASON_EVENT,EVENT_REASON_STOPLIMIT_TRIGGERED);  // Event reason (from the ENUM_EVENT_REASON enumeration)
+      event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,order.TypeOrderPrev());          // Type of the order that triggered an event
+      event.SetProperty(EVENT_PROP_TICKET_DEAL_EVENT,order.Ticket());               // Ticket of the order that triggered an event
+      event.SetProperty(EVENT_PROP_TYPE_ORDER_EVENT,order.TypeOrder());             // Event order type
+      event.SetProperty(EVENT_PROP_TICKET_ORDER_EVENT,order.Ticket());              // Event order ticket
+      event.SetProperty(EVENT_PROP_TYPE_ORDER_POSITION,order.TypeOrder());          // Position first order type
+      event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,order.Ticket());           // Position first order ticket
+      event.SetProperty(EVENT_PROP_POSITION_ID,order.PositionID());                 // Position ID
+      event.SetProperty(EVENT_PROP_POSITION_BY_ID,0);                               // Opposite position ID
+      event.SetProperty(EVENT_PROP_MAGIC_BY_ID,0);                                  // Opposite position magic number
+         
+      event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,order.TypeOrderPrev());      // Position order type before changing direction
+      event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,order.Ticket());           // Position order ticket before changing direction
+      event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,order.TypeOrder());         // Current position order type
+      event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,order.Ticket());          // Current position order ticket
+         
+      event.SetProperty(EVENT_PROP_MAGIC_ORDER,order.Magic());                      // Order magic number
+      event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order.TimePrev());           // Position first order time
+      event.SetProperty(EVENT_PROP_PRICE_EVENT,order.PricePrev());                  // Event price
+      event.SetProperty(EVENT_PROP_PRICE_OPEN,order.Price());                       // Order placement price
+      event.SetProperty(EVENT_PROP_PRICE_CLOSE,order.Price());                      // Order closure price
+      event.SetProperty(EVENT_PROP_PRICE_SL,order.StopLoss());                      // StopLoss order price
+      event.SetProperty(EVENT_PROP_PRICE_TP,order.TakeProfit());                    // TakeProfit order price
+      event.SetProperty(EVENT_PROP_VOLUME_ORDER_INITIAL,order.Volume());            // Requested order volume
+      event.SetProperty(EVENT_PROP_VOLUME_ORDER_EXECUTED,0);                        // Executed order volume
+      event.SetProperty(EVENT_PROP_VOLUME_ORDER_CURRENT,order.Volume());            // Remaining (unexecuted) order volume
+      event.SetProperty(EVENT_PROP_VOLUME_POSITION_EXECUTED,0);                     // Executed position volume
+      event.SetProperty(EVENT_PROP_PROFIT,0);                                       // Profit
+      event.SetProperty(EVENT_PROP_SYMBOL,order.Symbol());                          // Order symbol
+      event.SetProperty(EVENT_PROP_SYMBOL_BY_ID,order.Symbol());                    // Opposite position symbol
+      //--- Set the control program chart ID, decode the event code and set the event type
+      event.SetChartID(this.m_chart_id);
+      event.SetTypeEvent();
+      //--- Add the event object if it is not in the list
+      if(!this.IsPresentEventInList(event))
+        {
+         this.m_list_events.InsertSort(event);
+         //--- Send a message about the event and set the value of the last trading event
+         event.SendEvent();
+         this.m_trade_event=event.TradeEvent();
+        }
+      //--- If the event is already present in the list, remove a new event object and display a debugging message
+      else
+        {
+         ::Print(DFUN_ERR_LINE,TextByLanguage("Такое событие уже есть в списке","This event already in the list."));
+         delete event;
+        }
+     }
+  }
 //+------------------------------------------------------------------+
 //| Create a trading event depending on the order status             |
 //+------------------------------------------------------------------+
@@ -653,9 +746,7 @@ void CEventsCollection::NewDealEventHedge(COrder* deal,CArrayObj* list_history,C
         {
          //--- Add the flag of closing by an opposite position
          this.m_trade_event_code+=TRADE_EVENT_FLAG_BY_POS;
-      
          //--- Take the first order of the closing position
-         Print(DFUN,"PositionByID=",order_close.PositionByID());
          CArrayObj* list_close_by=this.GetListAllOrdersByPosID(list_history,order_close.PositionByID());
          COrder* order_close_by=list_close_by.At(0);
          if(order_close_by==NULL)
@@ -1226,10 +1317,10 @@ double CEventsCollection::SummaryVolumeDealsInByPosID(CArrayObj *list,const ulon
      }
    return vol;
   }
-//+---------------------------------------------------------------------+
-//| Return the total volume of all deals of OUT position by its         |
-//| ID (participation in closing by an opposite position is considered) |
-//+---------------------------------------------------------------------+
+//+--------------------------------------------------------------------+
+//| Return the total volume of all deals of OUT position by its        |
+//| ID (participation in closing by an opposite position is considered)|
+//+--------------------------------------------------------------------+
 double CEventsCollection::SummaryVolumeDealsOutByPosID(CArrayObj *list,const ulong position_id)
   {
    double vol=0.0;

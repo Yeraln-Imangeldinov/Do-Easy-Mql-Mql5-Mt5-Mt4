@@ -57,14 +57,30 @@ bool CEventOrderPlased::SupportProperty(ENUM_EVENT_PROP_DOUBLE property)
 //+------------------------------------------------------------------+
 void CEventOrderPlased::PrintShort(void)
   {
+   int    digits=(int)::SymbolInfoInteger(this.Symbol(),SYMBOL_DIGITS);
    string head="- "+this.TypeEventDescription()+": "+TimeMSCtoString(this.TimePosition())+" -\n";
-   string sl=(this.PriceStopLoss()>0 ? ", sl "+::DoubleToString(this.PriceStopLoss(),(int)::SymbolInfoInteger(this.Symbol(),SYMBOL_DIGITS)) : "");
-   string tp=(this.PriceTakeProfit()>0 ? ", tp "+::DoubleToString(this.PriceTakeProfit(),(int)::SymbolInfoInteger(this.Symbol(),SYMBOL_DIGITS)) : "");
+   string sl=(this.PriceStopLoss()>0 ? ", sl "+::DoubleToString(this.PriceStopLoss(),digits) : "");
+   string tp=(this.PriceTakeProfit()>0 ? ", tp "+::DoubleToString(this.PriceTakeProfit(),digits) : "");
    string vol=::DoubleToString(this.VolumeOrderInitial(),DigitsLots(this.Symbol()));
    string magic=(this.Magic()!=0 ? TextByLanguage(", магик ",", magic ")+(string)this.Magic() : "");
    string type=this.TypeOrderFirstDescription()+" #"+(string)this.TicketOrderEvent();
-   string price=TextByLanguage(" по цене "," at price ")+::DoubleToString(this.PriceOpen(),(int)::SymbolInfoInteger(this.Symbol(),SYMBOL_DIGITS));
-   string txt=head+this.Symbol()+TextByLanguage(" Установлен "," Placed ")+vol+" "+type+price+sl+tp+magic;
+   string event=TextByLanguage(" Установлен "," Placed ");
+   string price=TextByLanguage(" по цене "," at price ")+::DoubleToString(this.PriceOpen(),digits);
+   string txt=head+this.Symbol()+event+vol+" "+type+price+sl+tp+magic;
+   //--- If StopLimit order is activated
+   if(this.Reason()==EVENT_REASON_STOPLIMIT_TRIGGERED)
+     {
+      head="- "+this.TypeEventDescription()+": "+TimeMSCtoString(this.TimeEvent())+" -\n";
+      event=TextByLanguage(" Сработал "," Triggered ");
+      type=
+        (
+         OrderTypeDescription(this.TypeOrderPosPrevious())+" #"+(string)this.TicketOrderEvent()+
+         TextByLanguage(" по цене "," at price ")+DoubleToString(this.PriceEvent(),digits)+" -->\n"+
+         vol+" "+OrderTypeDescription(this.TypeOrderPosCurrent())+" #"+(string)this.TicketOrderEvent()+
+         TextByLanguage(" на цену "," on price ")+DoubleToString(this.PriceOpen(),digits)
+        );
+      txt=head+this.Symbol()+event+"("+TimeMSCtoString(this.TimePosition())+") "+vol+" "+type+sl+tp+magic;
+     }
    ::Print(txt);
   }
 //+------------------------------------------------------------------+
