@@ -1026,18 +1026,28 @@ string COrder::OrderExternalID(void) const
 //+------------------------------------------------------------------+
 int COrder::ProfitInPoints(void) const
   {
-   ENUM_ORDER_TYPE type=(ENUM_ORDER_TYPE)this.TypeOrder();
+   MqlTick tick={0};
    string symbol=this.Symbol();
+   if(!::SymbolInfoTick(symbol,tick))
+      return 0;
+   ENUM_ORDER_TYPE type=(ENUM_ORDER_TYPE)this.TypeOrder();
    double point=::SymbolInfoDouble(symbol,SYMBOL_POINT);
-   if(type>ORDER_TYPE_SELL || point==0) return 0;
+   if(type==ORDER_TYPE_CLOSE_BY || point==0) return 0;
    if(this.Status()==ORDER_STATUS_HISTORY_ORDER)
       return int(type==ORDER_TYPE_BUY ? (this.PriceClose()-this.PriceOpen())/point : type==ORDER_TYPE_SELL ? (this.PriceOpen()-this.PriceClose())/point : 0);
    else if(this.Status()==ORDER_STATUS_MARKET_POSITION)
      {
       if(type==ORDER_TYPE_BUY)
-         return int((::SymbolInfoDouble(symbol,SYMBOL_BID)-this.PriceOpen())/point);
+         return int((tick.bid-this.PriceOpen())/point);
       else if(type==ORDER_TYPE_SELL)
-         return int((this.PriceOpen()-::SymbolInfoDouble(symbol,SYMBOL_ASK))/point);
+         return int((this.PriceOpen()-tick.ask)/point);
+     }
+   else if(this.Status()==ORDER_STATUS_MARKET_PENDING)
+     {
+      if(type==ORDER_TYPE_BUY_LIMIT || type==ORDER_TYPE_BUY_STOP || type==ORDER_TYPE_BUY_STOP_LIMIT)
+         return (int)fabs((tick.bid-this.PriceOpen())/point);
+      else if(type==ORDER_TYPE_SELL_LIMIT || type==ORDER_TYPE_SELL_STOP || type==ORDER_TYPE_SELL_STOP_LIMIT)
+         return (int)fabs((this.PriceOpen()-tick.ask)/point);
      }
    return 0;
   }
@@ -1247,7 +1257,7 @@ string COrder::DirectionDescription(void) const
          this.OrderType()==DEAL_TYPE_BALANCE ? 
            (
             this.OrderProfit()>0 ? TextByLanguage("Пополнение счёта","Account refilled") : 
-            TextByLanguage("Вывод средств","Withdrawals from account")
+            TextByLanguage("Вывод средств","Withdrawal from account")
            )                                          :
          this.OrderType()==DEAL_TYPE_BUY     ? "Buy"  : 
          this.OrderType()==DEAL_TYPE_SELL    ? "Sell" :
@@ -1376,17 +1386,21 @@ string COrder::GetPropertyDescription(ENUM_ORDER_PROP_INTEGER property)
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
           ": \""+this.StatusDescription()+"\""
          )  :
-      property==ORDER_PROP_PROFIT_PT         ?  TextByLanguage("Прибыль в пунктах","Profit in points")+
+      property==ORDER_PROP_PROFIT_PT         ?  (
+                                                 this.Status()==ORDER_STATUS_MARKET_PENDING ? 
+                                                 TextByLanguage("Дистанция от цены в пунктах","Distance from price in points") : 
+                                                 TextByLanguage("Прибыль в пунктах","Profit in points")
+                                                )+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
           ": "+(string)this.GetProperty(property)
          )  :
       property==ORDER_PROP_CLOSE_BY_SL       ?  TextByLanguage("Закрытие по StopLoss","Close by StopLoss")+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
-          ": "+(this.GetProperty(property) ? TextByLanguage("Да","Yes") : TextByLanguage("Нет","No"))
+          ": "+(this.GetProperty(property)   ?  TextByLanguage("Да","Yes") : TextByLanguage("Нет","No"))
          )  :
       property==ORDER_PROP_CLOSE_BY_TP       ?  TextByLanguage("Закрытие по TakeProfit","Close by TakeProfit")+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :
-          ": "+(this.GetProperty(property)   ? TextByLanguage("Да","Yes") : TextByLanguage("Нет","No"))
+          ": "+(this.GetProperty(property)   ?  TextByLanguage("Да","Yes") : TextByLanguage("Нет","No"))
          )  :
       property==ORDER_PROP_GROUP_ID          ?  TextByLanguage("Идентификатор группы","Group's identifier")+
          (!this.SupportProperty(property)    ?  TextByLanguage(": Свойство не поддерживается",": Property not supported") :

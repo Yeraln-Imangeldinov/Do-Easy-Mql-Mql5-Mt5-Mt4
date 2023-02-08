@@ -28,7 +28,7 @@ public:
 //+------------------------------------------------------------------+
 bool CMarketPending::SupportProperty(ENUM_ORDER_PROP_INTEGER property)
   {
-   if(property==ORDER_PROP_PROFIT_PT         ||
+   if(
       property==ORDER_PROP_DEAL_ORDER_TICKET ||
       property==ORDER_PROP_DEAL_ENTRY        ||
       property==ORDER_PROP_TIME_UPDATE       ||
@@ -48,12 +48,12 @@ bool CMarketPending::SupportProperty(ENUM_ORDER_PROP_INTEGER property)
 //+------------------------------------------------------------------+
 bool CMarketPending::SupportProperty(ENUM_ORDER_PROP_DOUBLE property)
   {
-   if(property==ORDER_PROP_COMMISSION  ||
-      property==ORDER_PROP_SWAP        ||
-      property==ORDER_PROP_PROFIT      ||
-      property==ORDER_PROP_PROFIT_FULL ||
+   if(property==ORDER_PROP_COMMISSION        ||
+      property==ORDER_PROP_SWAP              ||
+      property==ORDER_PROP_PROFIT            ||
+      property==ORDER_PROP_PROFIT_FULL       ||
       property==ORDER_PROP_PRICE_CLOSE
-      #ifdef __MQL5__                  ||
+      #ifdef __MQL5__                        ||
       property==ORDER_PROP_PRICE_STOP_LIMIT
       #endif 
      ) return false;

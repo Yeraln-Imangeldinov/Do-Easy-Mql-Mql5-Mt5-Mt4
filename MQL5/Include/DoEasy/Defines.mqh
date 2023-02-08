@@ -129,7 +129,7 @@ enum ENUM_ORDER_PROP_INTEGER
    ORDER_PROP_DIRECTION,                                    // Direction (Buy, Sell)
   }; 
 #define ORDER_PROP_INTEGER_TOTAL    (24)                    // Total number of integer properties
-#define ORDER_PROP_INTEGER_SKIP     (1)                     // Number of order properties not used in sorting
+#define ORDER_PROP_INTEGER_SKIP     (0)                     // Number of order properties not used in sorting
 //+------------------------------------------------------------------+
 //| Order, deal, position real properties                            |
 //+------------------------------------------------------------------+
@@ -189,6 +189,7 @@ enum ENUM_SORT_ORDERS_MODE
    SORT_BY_ORDER_CLOSE_BY_SL     =  20,                     // Sort by the flag of closing an order by StopLoss
    SORT_BY_ORDER_CLOSE_BY_TP     =  21,                     // Sort by the flag of closing an order by TakeProfit
    SORT_BY_ORDER_GROUP_ID        =  22,                     // Sort by order/position group ID
+   SORT_BY_ORDER_DIRECTION       =  23,                     // Sort by direction (Buy, Sell)
    //--- Sort by real properties
    SORT_BY_ORDER_PRICE_OPEN      =  FIRST_ORD_DBL_PROP,     // Sort by open price
    SORT_BY_ORDER_PRICE_CLOSE     =  FIRST_ORD_DBL_PROP+1,   // Sort by close price
@@ -226,8 +227,11 @@ enum ENUM_TRADE_EVENT_FLAGS
    TRADE_EVENT_FLAG_ACCOUNT_BALANCE =  128,                 // Balance operation (clarified by a deal type)
    TRADE_EVENT_FLAG_PARTIAL         =  256,                 // Partial execution
    TRADE_EVENT_FLAG_BY_POS          =  512,                 // Executed by opposite position
-   TRADE_EVENT_FLAG_SL              =  1024,                // Executed by StopLoss
-   TRADE_EVENT_FLAG_TP              =  2048                 // Executed by TakeProfit
+   TRADE_EVENT_FLAG_PRICE           =  1024,                // Modify the placement price
+   TRADE_EVENT_FLAG_SL              =  2048,                // Execute by StopLoss
+   TRADE_EVENT_FLAG_TP              =  4096,                // Execute by TakeProfit
+   TRADE_EVENT_FLAG_ORDER_MODIFY    =  8192,                // Modify an order
+   TRADE_EVENT_FLAG_POSITION_MODIFY =  16384,               // Modify a position
   };
 //+------------------------------------------------------------------+
 //| List of possible trading events on the account                   |
@@ -285,6 +289,9 @@ enum ENUM_TRADE_EVENT
    TRADE_EVENT_MODIFY_ORDER_PRICE_TAKE_PROFIT,              // Changing order and TakeProfit price
    TRADE_EVENT_MODIFY_ORDER_PRICE_STOP_LOSS_TAKE_PROFIT,    // Changing order, StopLoss and TakeProfit price
    TRADE_EVENT_MODIFY_ORDER_STOP_LOSS_TAKE_PROFIT,          // Changing order's StopLoss and TakeProfit price
+   TRADE_EVENT_MODIFY_ORDER_STOP_LOSS,                      // Changing order's StopLoss
+   TRADE_EVENT_MODIFY_ORDER_TAKE_PROFIT,                    // Changing order's TakeProfit
+   TRADE_EVENT_MODIFY_POSITION_STOP_LOSS_TAKE_PROFIT,       // Changing position's StopLoss and TakeProfit
    TRADE_EVENT_MODIFY_POSITION_STOP_LOSS,                   // Changing position StopLoss
    TRADE_EVENT_MODIFY_POSITION_TAKE_PROFIT,                 // Changing position TakeProfit
   };
@@ -298,6 +305,7 @@ enum ENUM_EVENT_STATUS
    EVENT_STATUS_HISTORY_PENDING,                            // Historical pending order event (removal)
    EVENT_STATUS_HISTORY_POSITION,                           // Historical position event (closing)
    EVENT_STATUS_BALANCE,                                    // Balance operation event (accruing balance, withdrawing funds and events from the ENUM_DEAL_TYPE enumeration)
+   EVENT_STATUS_MODIFY                                      // Order/position modification event
   };
 //+------------------------------------------------------------------+
 //| Event reason                                                     |
@@ -312,6 +320,7 @@ enum ENUM_EVENT_REASON
    EVENT_REASON_ACTIVATED_PENDING,                          // Pending order activation
    EVENT_REASON_ACTIVATED_PENDING_PARTIALLY,                // Pending order partial activation
    EVENT_REASON_STOPLIMIT_TRIGGERED,                        // StopLimit order activation
+   EVENT_REASON_MODIFY,                                     // Modification
    EVENT_REASON_CANCEL,                                     // Cancelation
    EVENT_REASON_EXPIRED,                                    // Order expiration
    EVENT_REASON_DONE,                                       // Request executed in full
@@ -376,7 +385,7 @@ enum ENUM_EVENT_PROP_INTEGER
    EVENT_PROP_TYPE_ORD_POS_BEFORE,                          // Position type before changing the direction
    EVENT_PROP_TICKET_ORD_POS_BEFORE,                        // Position order ticket before changing direction
    EVENT_PROP_TYPE_ORD_POS_CURRENT,                         // Current position type
-   EVENT_PROP_TICKET_ORD_POS_CURRENT                        // Current position order ticket
+   EVENT_PROP_TICKET_ORD_POS_CURRENT,                       // Current position order ticket
   }; 
 #define EVENT_PROP_INTEGER_TOTAL (19)                       // Total number of integer event properties
 #define EVENT_PROP_INTEGER_SKIP  (4)                        // Number of order properties not used in sorting
@@ -394,9 +403,16 @@ enum ENUM_EVENT_PROP_DOUBLE
    EVENT_PROP_VOLUME_ORDER_EXECUTED,                        // Executed order volume
    EVENT_PROP_VOLUME_ORDER_CURRENT,                         // Remaining order volume
    EVENT_PROP_VOLUME_POSITION_EXECUTED,                     // Current executed position volume after a deal
-   EVENT_PROP_PROFIT                                        // Profit
+   EVENT_PROP_PROFIT,                                       // Profit
+   //---
+   EVENT_PROP_PRICE_OPEN_BEFORE,                            // Order price before modification
+   EVENT_PROP_PRICE_SL_BEFORE,                              // StopLoss price before modification
+   EVENT_PROP_PRICE_TP_BEFORE,                              // TakeProfit price before modification
+   EVENT_PROP_PRICE_EVENT_ASK,                              // Ask price during an event
+   EVENT_PROP_PRICE_EVENT_BID,                              // Bid price during an event
   };
-#define EVENT_PROP_DOUBLE_TOTAL  (10)                       // Total number of event's real properties
+#define EVENT_PROP_DOUBLE_TOTAL  (15)                       // Total number of event's real properties
+#define EVENT_PROP_DOUBLE_SKIP   (5)                        // Number of order properties not used in sorting
 //+------------------------------------------------------------------+
 //| Event's string properties                                        |
 //+------------------------------------------------------------------+
@@ -410,7 +426,7 @@ enum ENUM_EVENT_PROP_STRING
 //| Possible event sorting criteria                                  |
 //+------------------------------------------------------------------+
 #define FIRST_EVN_DBL_PROP       (EVENT_PROP_INTEGER_TOTAL-EVENT_PROP_INTEGER_SKIP)
-#define FIRST_EVN_STR_PROP       (EVENT_PROP_INTEGER_TOTAL+EVENT_PROP_DOUBLE_TOTAL-EVENT_PROP_INTEGER_SKIP)
+#define FIRST_EVN_STR_PROP       (EVENT_PROP_INTEGER_TOTAL-EVENT_PROP_INTEGER_SKIP+EVENT_PROP_DOUBLE_TOTAL-EVENT_PROP_DOUBLE_SKIP)
 enum ENUM_SORT_EVENTS_MODE
   {
    //--- Sort by integer properties

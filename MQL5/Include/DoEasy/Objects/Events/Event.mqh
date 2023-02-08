@@ -28,6 +28,7 @@ protected:
    ENUM_TRADE_EVENT  m_trade_event;                                  // Trading event
    bool              m_is_hedge;                                     // Hedge account flag
    long              m_chart_id;                                     // Control program chart ID
+   int               m_digits;                                       // Symbol's Digits()
    int               m_digits_acc;                                   // Number of decimal places for the account currency
    long              m_long_prop[EVENT_PROP_INTEGER_TOTAL];          // Event integer properties
    double            m_double_prop[EVENT_PROP_DOUBLE_TOTAL];         // Event real properties
@@ -114,6 +115,14 @@ public:
    double            VolumeOrderExecuted(void)                          const { return this.GetProperty(EVENT_PROP_VOLUME_ORDER_EXECUTED);                  }
    double            VolumeOrderCurrent(void)                           const { return this.GetProperty(EVENT_PROP_VOLUME_ORDER_CURRENT);                   }
    double            VolumePositionExecuted(void)                       const { return this.GetProperty(EVENT_PROP_VOLUME_POSITION_EXECUTED);               }
+
+//--- When modifying prices, (1) the order price, (2) StopLoss and (3) TakeProfit before modification are returned
+   double            PriceOpenBefore(void)                              const { return this.GetProperty(EVENT_PROP_PRICE_OPEN_BEFORE);                      }
+   double            PriceStopLossBefore(void)                          const { return this.GetProperty(EVENT_PROP_PRICE_SL_BEFORE);                        }
+   double            PriceTakeProfitBefore(void)                        const { return this.GetProperty(EVENT_PROP_PRICE_TP_BEFORE);                        }
+   double            PriceEventAsk(void)                                const { return this.GetProperty(EVENT_PROP_PRICE_EVENT_ASK);                        }
+   double            PriceEventBid(void)                                const { return this.GetProperty(EVENT_PROP_PRICE_EVENT_BID);                        }
+
 //--- Return the (1) symbol and (2) opposite position symbol
    string            Symbol(void)                                       const { return this.GetProperty(EVENT_PROP_SYMBOL);                                 }
    string            SymbolCloseBy(void)                                const { return this.GetProperty(EVENT_PROP_SYMBOL_BY_ID);                           }
@@ -147,7 +156,7 @@ public:
 //+------------------------------------------------------------------+
 //| Constructor                                                      |
 //+------------------------------------------------------------------+
-CEvent::CEvent(const ENUM_EVENT_STATUS event_status,const int event_code,const ulong ticket) : m_event_code(event_code)
+CEvent::CEvent(const ENUM_EVENT_STATUS event_status,const int event_code,const ulong ticket) : m_event_code(event_code),m_digits(0)
   {
    this.m_long_prop[EVENT_PROP_STATUS_EVENT]       =  event_status;
    this.m_long_prop[EVENT_PROP_TICKET_ORDER_EVENT] =  (long)ticket;
@@ -215,6 +224,8 @@ bool CEvent::IsEqual(CEvent *compared_event)
 //+------------------------------------------------------------------+
 void CEvent::SetTypeEvent(void)
   {
+//--- Set event symbol's Digits()
+   this.m_digits=(int)::SymbolInfoInteger(this.Symbol(),SYMBOL_DIGITS);
 //--- Pending order is set (check if the event code is matched since there can be only one flag here)
    if(this.m_event_code==TRADE_EVENT_FLAG_ORDER_PLASED)
      {
@@ -226,6 +237,54 @@ void CEvent::SetTypeEvent(void)
    if(this.m_event_code==TRADE_EVENT_FLAG_ORDER_REMOVED)
      {
       this.m_trade_event=TRADE_EVENT_PENDING_ORDER_REMOVED;
+      this.SetProperty(EVENT_PROP_TYPE_EVENT,this.m_trade_event);
+      return;
+     }
+//--- Pending order is modified
+   if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_ORDER_MODIFY))
+     {
+      //--- If the placement price is modified
+      if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_PRICE))
+        {
+         this.m_trade_event=TRADE_EVENT_MODIFY_ORDER_PRICE;
+         //--- If StopLoss and TakeProfit are modified
+         if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_SL) && this.IsPresentEventFlag(TRADE_EVENT_FLAG_TP))
+            this.m_trade_event=TRADE_EVENT_MODIFY_ORDER_PRICE_STOP_LOSS_TAKE_PROFIT;
+         //--- If StopLoss is modified
+         else if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_SL))
+            this.m_trade_event=TRADE_EVENT_MODIFY_ORDER_PRICE_STOP_LOSS;
+         //--- If TakeProfit is modified
+         else if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_TP))
+            this.m_trade_event=TRADE_EVENT_MODIFY_ORDER_PRICE_TAKE_PROFIT;
+        }
+      //--- If the placement price is not modified
+      else
+        {
+         //--- If StopLoss and TakeProfit are modified
+         if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_SL) && this.IsPresentEventFlag(TRADE_EVENT_FLAG_TP))
+            this.m_trade_event=TRADE_EVENT_MODIFY_ORDER_STOP_LOSS_TAKE_PROFIT;
+         //--- If StopLoss is modified
+         else if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_SL))
+            this.m_trade_event=TRADE_EVENT_MODIFY_ORDER_STOP_LOSS;
+         //--- If TakeProfit is modified
+         else if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_TP))
+            this.m_trade_event=TRADE_EVENT_MODIFY_ORDER_TAKE_PROFIT;
+        }
+      this.SetProperty(EVENT_PROP_TYPE_EVENT,this.m_trade_event);
+      return;
+     }
+//--- Position is modified
+   if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_POSITION_MODIFY))
+     {
+      //--- If StopLoss and TakeProfit are modified
+      if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_SL) && this.IsPresentEventFlag(TRADE_EVENT_FLAG_TP))
+         this.m_trade_event=TRADE_EVENT_MODIFY_POSITION_STOP_LOSS_TAKE_PROFIT;
+      //--- If StopLoss is modified
+      else if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_SL))
+         this.m_trade_event=TRADE_EVENT_MODIFY_POSITION_STOP_LOSS;
+      //--- If TakeProfit is modified
+      else if(this.IsPresentEventFlag(TRADE_EVENT_FLAG_TP))
+         this.m_trade_event=TRADE_EVENT_MODIFY_POSITION_TAKE_PROFIT;
       this.SetProperty(EVENT_PROP_TYPE_EVENT,this.m_trade_event);
       return;
      }
@@ -387,20 +446,20 @@ string CEvent::GetPropertyDescription(ENUM_EVENT_PROP_INTEGER property)
       property==EVENT_PROP_STATUS_EVENT            ?  TextByLanguage("Статус события","Status of event")+": \""+this.StatusDescription()+"\""                                             :
       property==EVENT_PROP_REASON_EVENT            ?  TextByLanguage("Причина события","Reason of event")+": "+this.ReasonDescription()                                                   :
       property==EVENT_PROP_TYPE_DEAL_EVENT         ?  TextByLanguage("Тип сделки","Deal's type")+": "+DealTypeDescription((ENUM_DEAL_TYPE)this.GetProperty(property))                     :
-      property==EVENT_PROP_TICKET_DEAL_EVENT       ?  TextByLanguage("Тикет сделки","Deal's ticket")+" #"+(string)this.GetProperty(property)                                              :
+      property==EVENT_PROP_TICKET_DEAL_EVENT       ?  TextByLanguage("Тикет сделки","Deal's ticket")+": #"+(string)this.GetProperty(property)                                              :
       property==EVENT_PROP_TYPE_ORDER_EVENT        ?  TextByLanguage("Тип ордера события","Event's order type")+": "+OrderTypeDescription((ENUM_ORDER_TYPE)this.GetProperty(property))    :
       property==EVENT_PROP_TYPE_ORDER_POSITION     ?  TextByLanguage("Тип ордера позиции","Position's order type")+": "+OrderTypeDescription((ENUM_ORDER_TYPE)this.GetProperty(property)) :
-      property==EVENT_PROP_TICKET_ORDER_POSITION   ?  TextByLanguage("Тикет первого ордера позиции","Position's first order ticket")+" #"+(string)this.GetProperty(property)              :
-      property==EVENT_PROP_TICKET_ORDER_EVENT      ?  TextByLanguage("Тикет ордера события","Event's order ticket")+" #"+(string)this.GetProperty(property)                               :
-      property==EVENT_PROP_POSITION_ID             ?  TextByLanguage("Идентификатор позиции","Position ID")+" #"+(string)this.GetProperty(property)                                       :
-      property==EVENT_PROP_POSITION_BY_ID          ?  TextByLanguage("Идентификатор встречной позиции","Opposite position's ID")+" #"+(string)this.GetProperty(property)                  :
+      property==EVENT_PROP_TICKET_ORDER_POSITION   ?  TextByLanguage("Тикет первого ордера позиции","Position's first order ticket")+": #"+(string)this.GetProperty(property)              :
+      property==EVENT_PROP_TICKET_ORDER_EVENT      ?  TextByLanguage("Тикет ордера события","Event's order ticket")+": #"+(string)this.GetProperty(property)                               :
+      property==EVENT_PROP_POSITION_ID             ?  TextByLanguage("Идентификатор позиции","Position ID")+": #"+(string)this.GetProperty(property)                                       :
+      property==EVENT_PROP_POSITION_BY_ID          ?  TextByLanguage("Идентификатор встречной позиции","Opposite position's ID")+": #"+(string)this.GetProperty(property)                  :
       property==EVENT_PROP_MAGIC_ORDER             ?  TextByLanguage("Магический номер","Magic number")+": "+(string)this.GetProperty(property)                                           :
       property==EVENT_PROP_MAGIC_BY_ID             ?  TextByLanguage("Магический номер встречной позиции","Magic number of opposite position")+": "+(string)this.GetProperty(property)    :
       property==EVENT_PROP_TIME_ORDER_POSITION     ?  TextByLanguage("Время открытия позиции","Position's open time")+": "+TimeMSCtoString(this.GetProperty(property))                  :
-      property==EVENT_PROP_TYPE_ORD_POS_BEFORE     ?  TextByLanguage("Тип ордера позиции до смены направления","Position order type before changing direction")                        :
-      property==EVENT_PROP_TICKET_ORD_POS_BEFORE   ?  TextByLanguage("Тикет ордера позиции до смены направления","Position order ticket before changing direction")                    :
-      property==EVENT_PROP_TYPE_ORD_POS_CURRENT    ?  TextByLanguage("Тип ордера текущей позиции","Current position order type")                                                       :
-      property==EVENT_PROP_TICKET_ORD_POS_CURRENT  ?  TextByLanguage("Тикет ордера текущей позиции","Current position order ticket")                                                   :
+      property==EVENT_PROP_TYPE_ORD_POS_BEFORE     ?  TextByLanguage("Тип ордера позиции до смены направления","Position order type before changing direction")+": "+OrderTypeDescription((ENUM_ORDER_TYPE)this.GetProperty(property)) :
+      property==EVENT_PROP_TICKET_ORD_POS_BEFORE   ?  TextByLanguage("Тикет ордера позиции до смены направления","Position order ticket before changing direction")+": #"+(string)this.GetProperty(property)                            :
+      property==EVENT_PROP_TYPE_ORD_POS_CURRENT    ?  TextByLanguage("Тип ордера текущей позиции","Current position order type")+": "+OrderTypeDescription((ENUM_ORDER_TYPE)this.GetProperty(property))                                :
+      property==EVENT_PROP_TICKET_ORD_POS_CURRENT  ?  TextByLanguage("Тикет ордера текущей позиции","Current position order ticket")+": #"+(string)this.GetProperty(property)                                                           :
       EnumToString(property)
      );
   }
@@ -413,16 +472,21 @@ string CEvent::GetPropertyDescription(ENUM_EVENT_PROP_DOUBLE property)
    int dgl=(int)DigitsLots(this.GetProperty(EVENT_PROP_SYMBOL));
    return
      (
-      property==EVENT_PROP_PRICE_EVENT             ?  TextByLanguage("Цена события","Price at the time of the event")+": "+::DoubleToString(this.GetProperty(property),dg)          :
-      property==EVENT_PROP_PRICE_OPEN              ?  TextByLanguage("Цена открытия","Open price")+": "+::DoubleToString(this.GetProperty(property),dg)                             :
-      property==EVENT_PROP_PRICE_CLOSE             ?  TextByLanguage("Цена закрытия","Close price")+": "+::DoubleToString(this.GetProperty(property),dg)                            :
-      property==EVENT_PROP_PRICE_SL                ?  TextByLanguage("Цена StopLoss","StopLoss price")+": "+::DoubleToString(this.GetProperty(property),dg)                         :
-      property==EVENT_PROP_PRICE_TP                ?  TextByLanguage("Цена TakeProfit","TakeProfit price")+": "+::DoubleToString(this.GetProperty(property),dg)                     :
-      property==EVENT_PROP_VOLUME_ORDER_INITIAL    ?  TextByLanguage("Начальный объём ордера","Order initial volume")+": "+::DoubleToString(this.GetProperty(property),dgl)         :
-      property==EVENT_PROP_VOLUME_ORDER_EXECUTED   ?  TextByLanguage("Исполненный объём ордера","Order executed volume")+": "+::DoubleToString(this.GetProperty(property),dgl)      :
-      property==EVENT_PROP_VOLUME_ORDER_CURRENT    ?  TextByLanguage("Оставшийся объём ордера","Order remaining volume")+": "+::DoubleToString(this.GetProperty(property),dgl)      :
-      property==EVENT_PROP_VOLUME_POSITION_EXECUTED ? TextByLanguage("Текущий объём позиции","Position current volume")+": "+::DoubleToString(this.GetProperty(property),dgl)       :
-      property==EVENT_PROP_PROFIT                  ?  TextByLanguage("Профит","Profit")+": "+::DoubleToString(this.GetProperty(property),this.m_digits_acc)                         :
+      property==EVENT_PROP_PRICE_EVENT             ?  TextByLanguage("Цена на момент события","Price at the time of event")+": "+::DoubleToString(this.GetProperty(property),dg)               :
+      property==EVENT_PROP_PRICE_OPEN              ?  TextByLanguage("Цена открытия","Open price")+": "+::DoubleToString(this.GetProperty(property),dg)                                            :
+      property==EVENT_PROP_PRICE_CLOSE             ?  TextByLanguage("Цена закрытия","Close price")+": "+::DoubleToString(this.GetProperty(property),dg)                                           :
+      property==EVENT_PROP_PRICE_SL                ?  TextByLanguage("Цена StopLoss","StopLoss price")+": "+::DoubleToString(this.GetProperty(property),dg)                                        :
+      property==EVENT_PROP_PRICE_TP                ?  TextByLanguage("Цена TakeProfit","TakeProfit price")+": "+::DoubleToString(this.GetProperty(property),dg)                                    :
+      property==EVENT_PROP_VOLUME_ORDER_INITIAL    ?  TextByLanguage("Начальный объём ордера","Order initial volume")+": "+::DoubleToString(this.GetProperty(property),dgl)                        :
+      property==EVENT_PROP_VOLUME_ORDER_EXECUTED   ?  TextByLanguage("Исполненный объём ордера","Order executed volume")+": "+::DoubleToString(this.GetProperty(property),dgl)                     :
+      property==EVENT_PROP_VOLUME_ORDER_CURRENT    ?  TextByLanguage("Оставшийся объём ордера","Order remaining volume")+": "+::DoubleToString(this.GetProperty(property),dgl)                     :
+      property==EVENT_PROP_VOLUME_POSITION_EXECUTED ? TextByLanguage("Текущий объём позиции","Position current volume")+": "+::DoubleToString(this.GetProperty(property),dgl)                      :
+      property==EVENT_PROP_PROFIT                  ?  TextByLanguage("Профит","Profit")+": "+::DoubleToString(this.GetProperty(property),this.m_digits_acc)                                        :
+      property==EVENT_PROP_PRICE_OPEN_BEFORE       ?  TextByLanguage("Цена открытия до модификации","Open price before modification")+": "+::DoubleToString(this.GetProperty(property),dg)         :
+      property==EVENT_PROP_PRICE_SL_BEFORE         ?  TextByLanguage("Цена StopLoss до модификации","StopLoss price before modification")+": "+::DoubleToString(this.GetProperty(property),dg)     :
+      property==EVENT_PROP_PRICE_TP_BEFORE         ?  TextByLanguage("Цена TakeProfit до модификации","TakeProfit price before modification")+": "+::DoubleToString(this.GetProperty(property),dg) :
+      property==EVENT_PROP_PRICE_EVENT_ASK         ?  TextByLanguage("Цена Ask в момент события","Ask price at the time of event")+": "+::DoubleToString(this.GetProperty(property),dg)        :
+      property==EVENT_PROP_PRICE_EVENT_BID         ?  TextByLanguage("Цена Bid в момент события","Bid price at the time of event")+": "+::DoubleToString(this.GetProperty(property),dg)        :
       EnumToString(property)
      );
   }
@@ -461,6 +525,7 @@ string CEvent::TypeEventDescription(void) const
    ENUM_TRADE_EVENT event=this.TypeEvent();
    return
      (
+      event==TRADE_EVENT_NO_EVENT                              ?  TextByLanguage("Нет торгового события","No trade event")                                              :
       event==TRADE_EVENT_PENDING_ORDER_PLASED                  ?  TextByLanguage("Отложенный ордер установлен","Pending order placed")                                  :
       event==TRADE_EVENT_PENDING_ORDER_REMOVED                 ?  TextByLanguage("Отложенный ордер удалён","Pending order removed")                                     :
       event==TRADE_EVENT_ACCOUNT_CREDIT                        ?  TextByLanguage("Начисление кредита","Credit")                                                         :
@@ -479,7 +544,7 @@ string CEvent::TypeEventDescription(void) const
       event==TRADE_EVENT_DIVIDENT_FRANKED                      ?  TextByLanguage("Начисление франкированного дивиденда","Franked (non-taxable) dividend operations")    :
       event==TRADE_EVENT_TAX                                   ?  TextByLanguage("Начисление налога","Tax charges")                                                     :
       event==TRADE_EVENT_ACCOUNT_BALANCE_REFILL                ?  TextByLanguage("Пополнение средств на балансе","Balance refill")                                      :
-      event==TRADE_EVENT_ACCOUNT_BALANCE_WITHDRAWAL            ?  TextByLanguage("Снятие средств с баланса","Withdrawals")                                              :
+      event==TRADE_EVENT_ACCOUNT_BALANCE_WITHDRAWAL            ?  TextByLanguage("Снятие средств с баланса","Withdrawal")                                              :
       event==TRADE_EVENT_PENDING_ORDER_ACTIVATED               ?  TextByLanguage("Отложенный ордер активирован ценой","Pending order activated")                        :
       event==TRADE_EVENT_PENDING_ORDER_ACTIVATED_PARTIAL       ?  TextByLanguage("Отложенный ордер активирован ценой частично","Pending order activated partially")     :
       event==TRADE_EVENT_POSITION_OPENED                       ?  TextByLanguage("Позиция открыта","Position opened")                                                  :
@@ -498,10 +563,22 @@ string CEvent::TypeEventDescription(void) const
       event==TRADE_EVENT_POSITION_VOLUME_ADD_BY_PENDING        ?  TextByLanguage("Добавлен объём к позиции активацией отложенного ордера","Added volume to position by activation of pending order")        :
       
       event==TRADE_EVENT_POSITION_REVERSED_BY_MARKET_PARTIAL   ?  TextByLanguage("Разворот позиции частичным исполнением запроса","Position reversal by partial completion of market request")                   :
-      event==TRADE_EVENT_POSITION_REVERSED_BY_PENDING_PARTIAL  ?  TextByLanguage("Разворот позиции частичным срабатыванием отложенного ордера","Position reversal by partially triggered pending order")        :
-      event==TRADE_EVENT_POSITION_VOLUME_ADD_BY_MARKET_PARTIAL ?  TextByLanguage("Добавлен объём к позиции частичным исполнением запроса","Added volume to position by partial completion of market request")    :
-      event==TRADE_EVENT_POSITION_VOLUME_ADD_BY_PENDING_PARTIAL ? TextByLanguage("Добавлен объём к позиции активацией отложенного ордера","Added volume to position by triggered pending order")  :
-      TextByLanguage("Нет торгового события","No trade event")
+      event==TRADE_EVENT_POSITION_REVERSED_BY_PENDING_PARTIAL  ?  TextByLanguage("Разворот позиции частичным срабатыванием отложенного ордера","Position reversal by a partially triggered pending order")        :
+      event==TRADE_EVENT_POSITION_VOLUME_ADD_BY_MARKET_PARTIAL ?  TextByLanguage("Добавлен объём к позиции частичным исполнением запроса","Added volume to position by partial completion of a market request")    :
+      event==TRADE_EVENT_POSITION_VOLUME_ADD_BY_PENDING_PARTIAL ? TextByLanguage("Добавлен объём к позиции активацией отложенного ордера","Added volume to position by a triggered pending order")  :
+
+      event==TRADE_EVENT_TRIGGERED_STOP_LIMIT_ORDER            ?  TextByLanguage("Сработал StopLimit-ордер","StopLimit order triggered.")                                                                         :
+      event==TRADE_EVENT_MODIFY_ORDER_PRICE                    ?  TextByLanguage("Модифицирована цена установки ордера ","Modified order price")                                                                  :
+      event==TRADE_EVENT_MODIFY_ORDER_PRICE_STOP_LOSS          ?  TextByLanguage("Модифицированы цена установки и StopLoss ордера","Modified order price and StopLoss")                                        :
+      event==TRADE_EVENT_MODIFY_ORDER_PRICE_TAKE_PROFIT        ?  TextByLanguage("Модифицированы цена установки и TakeProfit ордера","Modified order price and TakeProfit")                                    :
+      event==TRADE_EVENT_MODIFY_ORDER_PRICE_STOP_LOSS_TAKE_PROFIT ?  TextByLanguage("Модифицированы цена установки, StopLoss и TakeProfit ордера","Modified order price, StopLoss and TakeProfit")             :
+      event==TRADE_EVENT_MODIFY_ORDER_STOP_LOSS_TAKE_PROFIT    ?  TextByLanguage("Модифицированы цены StopLoss и TakeProfit ордера","Modified order's StopLoss and TakeProfit")                                  :
+      event==TRADE_EVENT_MODIFY_ORDER_STOP_LOSS                ?  TextByLanguage("Модифицирован StopLoss ордера","Modified order's StopLoss")                                                                       :
+      event==TRADE_EVENT_MODIFY_ORDER_TAKE_PROFIT              ?  TextByLanguage("Модифицирован TakeProfit ордера","Modified order's TakeProfit")                                                                   :
+      event==TRADE_EVENT_MODIFY_POSITION_STOP_LOSS_TAKE_PROFIT ?  TextByLanguage("Модифицированы цены StopLoss и TakeProfit позиции","Modified position's StopLoss and TakeProfit")                              :
+      event==TRADE_EVENT_MODIFY_POSITION_STOP_LOSS             ?  TextByLanguage("Модифицирован StopLoss позиции","Modified position's StopLoss")                                                                   :
+      event==TRADE_EVENT_MODIFY_POSITION_TAKE_PROFIT           ?  TextByLanguage("Модифицирован TakeProfit позиции","Modified position's TakeProfit")                                                               :
+      EnumToString(event)
      );   
   }
 //+------------------------------------------------------------------+
@@ -563,14 +640,16 @@ string CEvent::ReasonDescription(void) const
      (
       reason==EVENT_REASON_ACTIVATED_PENDING                ?  TextByLanguage("Активирован отложенный ордер","Pending order activated")                           :
       reason==EVENT_REASON_ACTIVATED_PENDING_PARTIALLY      ?  TextByLanguage("Частичное срабатывание отложенного ордера","Pending order partially triggered")    :
+      reason==EVENT_REASON_STOPLIMIT_TRIGGERED              ?  TextByLanguage("Срабатывание StopLimit-ордера","StopLimit order triggered")                        :
+      reason==EVENT_REASON_MODIFY                           ?  TextByLanguage("Модификация","Modified")                                                           :
       reason==EVENT_REASON_CANCEL                           ?  TextByLanguage("Отмена","Canceled")                                                                :
       reason==EVENT_REASON_EXPIRED                          ?  TextByLanguage("Истёк срок действия","Expired")                                                    :
       reason==EVENT_REASON_DONE                             ?  TextByLanguage("Рыночный запрос, выполненный в полном объёме","Fully completed market request")    :
       reason==EVENT_REASON_DONE_PARTIALLY                   ?  TextByLanguage("Выполненный частично рыночный запрос","Partially completed market request")        :
       reason==EVENT_REASON_VOLUME_ADD                       ?  TextByLanguage("Добавлен объём к позиции","Added volume to position")                              :
       reason==EVENT_REASON_VOLUME_ADD_PARTIALLY             ?  TextByLanguage("Добавлен объём к позиции частичным исполнением заявки","Volume added to the position by request partial completion")                 :
-      reason==EVENT_REASON_VOLUME_ADD_BY_PENDING            ?  TextByLanguage("Добавлен объём к позиции активацией отложенного ордера","Added volume to position by triggering pending order")                      :
-      reason==EVENT_REASON_VOLUME_ADD_BY_PENDING_PARTIALLY  ?  TextByLanguage("Добавлен объём к позиции частичной активацией отложенного ордера","Added volume to position by partially triggered pending order")  :
+      reason==EVENT_REASON_VOLUME_ADD_BY_PENDING            ?  TextByLanguage("Добавлен объём к позиции активацией отложенного ордера","Added volume to position by triggering a pending order")                      :
+      reason==EVENT_REASON_VOLUME_ADD_BY_PENDING_PARTIALLY  ?  TextByLanguage("Добавлен объём к позиции частичной активацией отложенного ордера","Added volume to position by a partially triggered pending order")  :
       reason==EVENT_REASON_REVERSE                          ?  TextByLanguage("Разворот позиции","Position reversal")  :
       reason==EVENT_REASON_REVERSE_PARTIALLY                ?  TextByLanguage("Разворот позиции частичным исполнением заявки","Position reversal by partial request execution")                             :
       reason==EVENT_REASON_REVERSE_BY_PENDING               ?  TextByLanguage("Разворот позиции при срабатывании отложенного ордера","Position reversal on triggered pending order")                               :

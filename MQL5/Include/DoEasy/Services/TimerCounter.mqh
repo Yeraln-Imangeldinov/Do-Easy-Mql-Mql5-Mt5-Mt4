@@ -26,7 +26,7 @@ public:
    bool              IsTimeDone(void);
    //--- Set the counter parameters
    void              SetParams(const ulong step,const ulong pause)         { this.m_counter_step=step; this.m_counter_pause=pause;  }
-   //--- Return th counter id
+   //--- Return the counter id
    virtual  int      Type(void)                                      const { return this.m_counter_id;                              }
    //--- Compare counter objects
    virtual int       Compare(const CObject *node,const int mode=0)   const;

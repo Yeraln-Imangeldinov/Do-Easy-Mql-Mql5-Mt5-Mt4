@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                             TestDoEasyPart06.mq5 |
+//|                                             TestDoEasyPart08.mq5 |
 //|                        Copyright 2018, MetaQuotes Software Corp. |
 //|                             https://mql5.com/en/users/artmedia70 |
 //+------------------------------------------------------------------+
@@ -28,9 +28,12 @@ enum ENUM_BUTTONS
    BUTT_CLOSE_SELL_BY_BUY,
    BUTT_DELETE_PENDING,
    BUTT_CLOSE_ALL,
-   BUTT_PROFIT_WITHDRAWAL
+   BUTT_PROFIT_WITHDRAWAL,
+   BUTT_SET_STOP_LOSS,
+   BUTT_SET_TAKE_PROFIT,
+   BUTT_TRAILING_ALL
   };
-#define TOTAL_BUTT   (17)
+#define TOTAL_BUTT   (20)
 //--- structures
 struct SDataButt
   {
@@ -38,16 +41,21 @@ struct SDataButt
    string      text;
   };
 //--- input variables
-input ulong    InpMagic       =  123;  // Magic number
-input double   InpLots        =  0.1;  // Lots
-input uint     InpStopLoss    =  50;   // StopLoss in points
-input uint     InpTakeProfit  =  50;   // TakeProfit in points
-input uint     InpDistance    =  50;   // Pending orders distance (points)
-input uint     InpDistanceSL  =  50;   // StopLimit orders distance (points)
-input uint     InpSlippage    =  0;    // Slippage in points
-input double   InpWithdrawal  =  10;   // Withdrawal funds (in tester)
-input uint     InpButtShiftX  =  40;   // Buttons X shift 
-input uint     InpButtShiftY  =  10;   // Buttons Y shift 
+input ulong    InpMagic             =  123;  // Magic number
+input double   InpLots              =  0.1;  // Lots
+input uint     InpStopLoss          =  50;   // StopLoss in points
+input uint     InpTakeProfit        =  50;   // TakeProfit in points
+input uint     InpDistance          =  50;   // Pending orders distance (points)
+input uint     InpDistanceSL        =  50;   // StopLimit orders distance (points)
+input uint     InpSlippage          =  0;    // Slippage in points
+input double   InpWithdrawal        =  10;   // Withdrawal funds (in tester)
+input uint     InpButtShiftX        =  40;   // Buttons X shift 
+input uint     InpButtShiftY        =  10;   // Buttons Y shift 
+input uint     InpTrailingStop      =  50;   // Trailing Stop (points)
+input uint     InpTrailingStep      =  20;   // Trailing Step (points)
+input uint     InpTrailingStart     =  0;    // Trailing Start (points)
+input uint     InpStopLossModify    =  20;   // StopLoss for modification (points)
+input uint     InpTakeProfitModify  =  60;   // TakeProfit for modification (points)
 //--- global variables
 CEngine        engine;
 CTrade         trade;
@@ -61,6 +69,12 @@ uint           takeprofit;
 uint           distance_pending;
 uint           distance_stoplimit;
 uint           slippage;
+bool           trailing_on;
+double         trailing_stop;
+double         trailing_step;
+uint           trailing_start;
+uint           stoploss_to_modify;
+uint           takeprofit_to_modify;
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
@@ -69,6 +83,9 @@ int OnInit()
 //--- Calling the function displays the list of enumeration constants in the journal 
 //--- (the list is set in the strings 22 and 25 of the DELib.mqh file) for checking the constants validity
    //EnumNumbersTest();
+//--- check for undeleted objects
+   if(IsPresentObects(prefix))
+      ObjectsDeleteAll(0,prefix);
 //--- set global variables
    prefix=MQLInfoString(MQL_PROGRAM_NAME)+"_";
    for(int i=0;i<TOTAL_BUTT;i++)
@@ -83,9 +100,16 @@ int OnInit()
    distance_pending=InpDistance;
    distance_stoplimit=InpDistanceSL;
    slippage=InpSlippage;
+   trailing_stop=InpTrailingStop*Point();
+   trailing_step=InpTrailingStep*Point();
+   trailing_start=InpTrailingStart;
+   stoploss_to_modify=InpStopLossModify;
+   takeprofit_to_modify=InpTakeProfitModify;
 //--- create buttons
    if(!CreateButtons(InpButtShiftX,InpButtShiftY))
       return INIT_FAILED;
+//--- set button trailing
+   ButtonState(butt_data[TOTAL_BUTT-1].name,trailing_on);
 //--- setting trade parameters
    trade.SetDeviationInPoints(slippage);
    trade.SetExpertMagicNumber(magic_number);
@@ -109,24 +133,24 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
   {
-//---
+//--- Initialize the last trading event
    static ENUM_TRADE_EVENT last_event=WRONG_VALUE;
+//--- If working in the tester
    if(MQLInfoInteger(MQL_TESTER))
      {
       engine.OnTimer();
-      int total=ObjectsTotal(0);
-      for(int i=0;i<total;i++)
-        {
-         string obj_name=ObjectName(0,i);
-         if(StringFind(obj_name,prefix+"BUTT_")<0)
-            continue;
-         PressButtonEvents(obj_name);
-        }
+      PressButtonsControl();
      }
+//--- If the last trading event changed
    if(engine.LastTradeEvent()!=last_event)
      {
-      Comment("\nLast trade event: ",EnumToString(engine.LastTradeEvent()));
       last_event=engine.LastTradeEvent();
+     }
+//--- If the trailing flag is set
+   if(trailing_on)
+     {
+      TrailingPositions();
+      TrailingOrders();
      }
   }
 //+------------------------------------------------------------------+
@@ -158,20 +182,44 @@ void OnChartEvent(const int id,
      } 
   }
 //+------------------------------------------------------------------+
+//| Return the flag of a prefixed object presence                    |
+//+------------------------------------------------------------------+
+bool IsPresentObects(const string object_prefix)
+  {
+   for(int i=ObjectsTotal(0)-1;i>=0;i--)
+      if(StringFind(ObjectName(0,i,0),object_prefix)>WRONG_VALUE)
+         return true;
+   return false;
+  }
+//+------------------------------------------------------------------+
+//| Tracking the buttons' status                                     |
+//+------------------------------------------------------------------+
+void PressButtonsControl(void)
+  {
+   int total=ObjectsTotal(0);
+   for(int i=0;i<total;i++)
+     {
+      string obj_name=ObjectName(0,i);
+      if(StringFind(obj_name,prefix+"BUTT_")<0)
+         continue;
+      PressButtonEvents(obj_name);
+     }
+  }
+//+------------------------------------------------------------------+
 //| Create the buttons panel                                         |
 //+------------------------------------------------------------------+
 bool CreateButtons(const int shift_x=30,const int shift_y=0)
   {
    int h=18,w=84,offset=2;
-   int cx=offset+shift_x,cy=offset+shift_y+(h+1)*(TOTAL_BUTT/2)+2*h+1;
+   int cx=offset+shift_x,cy=offset+shift_y+(h+1)*(TOTAL_BUTT/2)+3*h+1;
    int x=cx,y=cy;
    int shift=0;
    for(int i=0;i<TOTAL_BUTT;i++)
      {
       x=x+(i==7 ? w+2 : 0);
-      if(i==TOTAL_BUTT-3) x=cx;
+      if(i==TOTAL_BUTT-6) x=cx;
       y=(cy-(i-(i>6 ? 7 : 0))*(h+1));
-      if(!ButtonCreate(butt_data[i].name,x,y,(i<TOTAL_BUTT-3 ? w : w*2+2),h,butt_data[i].text,(i<4 ? clrGreen : i>6 && i<11 ? clrRed : clrBlue)))
+      if(!ButtonCreate(butt_data[i].name,x,y,(i<TOTAL_BUTT-6 ? w : w*2+2),h,butt_data[i].text,(i<4 ? clrGreen : i>6 && i<11 ? clrRed : clrBlue)))
         {
          Alert(TextByLanguage("Не удалось создать кнопку \"","Could not create button \""),butt_data[i].text);
          return false;
@@ -223,6 +271,13 @@ bool ButtonState(const string name)
 void ButtonState(const string name,const bool state)
   {
    ObjectSetInteger(0,name,OBJPROP_STATE,state);
+   if(name==butt_data[TOTAL_BUTT-1].name)
+     {
+      if(state)
+         ObjectSetInteger(0,name,OBJPROP_BGCOLOR,C'220,255,240');
+      else
+         ObjectSetInteger(0,name,OBJPROP_BGCOLOR,C'240,240,240');
+     }
   }
 //+------------------------------------------------------------------+
 //| Transform enumeration into the button text                       |
@@ -231,6 +286,9 @@ string EnumToButtText(const ENUM_BUTTONS member)
   {
    string txt=StringSubstr(EnumToString(member),5);
    StringToLower(txt);
+   StringReplace(txt,"set_take_profit","Set TakeProfit");
+   StringReplace(txt,"set_stop_loss","Set StopLoss");
+   StringReplace(txt,"trailing_all","Trailing All");
    StringReplace(txt,"buy","Buy");
    StringReplace(txt,"sell","Sell");
    StringReplace(txt,"_limit"," Limit");
@@ -546,11 +604,280 @@ void PressButtonEvents(const string button_name)
             TesterWithdrawal(withdrawal);
            }
         }
+      //--- If the BUTT_SET_STOP_LOSS button is pressed: Place StopLoss to all orders and positions where it is not present
+      if(button==EnumToString(BUTT_SET_STOP_LOSS))
+        {
+         SetStopLoss();
+        }
+      //--- If the BUTT_SET_TAKE_PROFIT button is pressed: Place TakeProfit to all orders and positions where it is not present
+      if(button==EnumToString(BUTT_SET_TAKE_PROFIT))
+        {
+         SetTakeProfit();
+        }
       //--- Wait for 1/10 of a second
       Sleep(100);
-      //--- "Unpress" the button and redraw the chart
-      ButtonState(button_name,false);
+      //--- "Unpress" the button (if this is not a trailing button)
+      if(button!=EnumToString(BUTT_TRAILING_ALL))
+         ButtonState(button_name,false);
+      //--- If the BUTT_TRAILING_ALL button is pressed
+      else
+        {
+         //--- Set the color of the active button
+         ButtonState(button_name,true);
+         trailing_on=true;
+        }
+      //--- re-draw the chart
       ChartRedraw();
+     }
+   //--- Return the inactive button color (if this is a trailing button)
+   else if(button==EnumToString(BUTT_TRAILING_ALL))
+     {
+      ButtonState(button_name,false);
+      trailing_on=false;
+      //--- re-draw the chart
+      ChartRedraw();
+     }
+  }
+//+------------------------------------------------------------------+
+//| Set StopLoss to all orders and positions                         |
+//+------------------------------------------------------------------+
+void SetStopLoss(void)
+  {
+   if(stoploss_to_modify==0)
+      return;
+//--- Set StopLoss to all positions where it is absent
+   CArrayObj* list=engine.GetListMarketPosition();
+   list=CSelect::ByOrderProperty(list,ORDER_PROP_SL,0,EQUAL);
+   if(list==NULL)
+      return;
+   int total=list.Total();
+   for(int i=total-1;i>=0;i--)
+     {
+      COrder* position=list.At(i);
+      if(position==NULL)
+         continue;
+      double sl=CorrectStopLoss(position.Symbol(),position.TypeByDirection(),0,stoploss_to_modify);
+      trade.PositionModify(position.Ticket(),sl,position.TakeProfit());
+     }
+//--- Set StopLoss to all pending orders where it is absent
+   list=engine.GetListMarketPendings();
+   list=CSelect::ByOrderProperty(list,ORDER_PROP_SL,0,EQUAL);
+   if(list==NULL)
+      return;
+   total=list.Total();
+   for(int i=total-1;i>=0;i--)
+     {
+      COrder* order=list.At(i);
+      if(order==NULL)
+         continue;
+      double sl=CorrectStopLoss(order.Symbol(),(ENUM_ORDER_TYPE)order.TypeOrder(),order.PriceOpen(),stoploss_to_modify);
+      trade.OrderModify(order.Ticket(),order.PriceOpen(),sl,order.TakeProfit(),trade.RequestTypeTime(),trade.RequestExpiration(),order.PriceStopLimit());
+     }
+  }
+//+------------------------------------------------------------------+
+//| Set TakeProfit to all orders and positions                       |
+//+------------------------------------------------------------------+
+void SetTakeProfit(void)
+  {
+   if(takeprofit_to_modify==0)
+      return;
+//--- Set TakeProfit to all positions where it is absent
+   CArrayObj* list=engine.GetListMarketPosition();
+   list=CSelect::ByOrderProperty(list,ORDER_PROP_TP,0,EQUAL);
+   if(list==NULL)
+      return;
+   int total=list.Total();
+   for(int i=total-1;i>=0;i--)
+     {
+      COrder* position=list.At(i);
+      if(position==NULL)
+         continue;
+      double tp=CorrectTakeProfit(position.Symbol(),position.TypeByDirection(),0,takeprofit_to_modify);
+      trade.PositionModify(position.Ticket(),position.StopLoss(),tp);
+     }
+//--- Set TakeProfit to all pending orders where it is absent
+   list=engine.GetListMarketPendings();
+   list=CSelect::ByOrderProperty(list,ORDER_PROP_TP,0,EQUAL);
+   if(list==NULL)
+      return;
+   total=list.Total();
+   for(int i=total-1;i>=0;i--)
+     {
+      COrder* order=list.At(i);
+      if(order==NULL)
+         continue;
+      double tp=CorrectTakeProfit(order.Symbol(),(ENUM_ORDER_TYPE)order.TypeOrder(),order.PriceOpen(),takeprofit_to_modify);
+      trade.OrderModify(order.Ticket(),order.PriceOpen(),order.StopLoss(),tp,trade.RequestTypeTime(),trade.RequestExpiration(),order.PriceStopLimit());
+     }
+  }
+//+------------------------------------------------------------------+
+//| Trailing stop of a position with the maximum profit              |
+//+------------------------------------------------------------------+
+void TrailingPositions(void)
+  {
+   MqlTick tick;
+   if(!SymbolInfoTick(Symbol(),tick))
+      return;
+   double stop_level=StopLevel(Symbol(),2)*Point();
+   //--- Get the list of all open positions
+   CArrayObj* list=engine.GetListMarketPosition();
+   //--- Select only Buy positions from the list
+   CArrayObj* list_buy=CSelect::ByOrderProperty(list,ORDER_PROP_TYPE,POSITION_TYPE_BUY,EQUAL);
+   //--- Sort the list by profit considering commission and swap
+   list_buy.Sort(SORT_BY_ORDER_PROFIT_FULL);
+   //--- Get the index of the Buy position with the maximum profit
+   int index_buy=CSelect::FindOrderMax(list_buy,ORDER_PROP_PROFIT_FULL);
+   if(index_buy>WRONG_VALUE)
+     {
+      COrder* buy=list_buy.At(index_buy);
+      if(buy!=NULL)
+        {
+         //--- Calculate the new StopLoss
+         double sl=NormalizeDouble(tick.bid-trailing_stop,Digits());
+         //--- If the price and the StopLevel based on it are higher than the new StopLoss (the distance by StopLevel is maintained)
+         if(tick.bid-stop_level>sl) 
+           {
+            //--- If the new StopLoss level exceeds the trailing step based on the current StopLoss
+            if(buy.StopLoss()+trailing_step<sl)
+              {
+               //--- If we trail at any profit or position profit in points exceeds the trailing start, modify StopLoss
+               if(trailing_start==0 || buy.ProfitInPoints()>(int)trailing_start)
+                  trade.PositionModify(buy.Ticket(),sl,buy.TakeProfit());
+              }
+           }
+        }
+     }
+   //--- Select only Sell positions from the list
+   CArrayObj* list_sell=CSelect::ByOrderProperty(list,ORDER_PROP_TYPE,POSITION_TYPE_SELL,EQUAL);
+   //--- Sort the list by profit considering commission and swap
+   list_sell.Sort(SORT_BY_ORDER_PROFIT_FULL);
+   //--- Get the index of the Sell position with the maximum profit
+   int index_sell=CSelect::FindOrderMax(list_sell,ORDER_PROP_PROFIT_FULL);
+   if(index_sell>WRONG_VALUE)
+     {
+      COrder* sell=list_sell.At(index_sell);
+      if(sell!=NULL)
+        {
+         //--- Calculate the new StopLoss
+         double sl=NormalizeDouble(tick.ask+trailing_stop,Digits());
+         //--- If the price and StopLevel based on it are below the new StopLoss (the distance by StopLevel is maintained)
+         if(tick.ask+stop_level<sl) 
+           {
+            //--- If the new StopLoss level is below the trailing step based on the current StopLoss or a position has no StopLoss
+            if(sell.StopLoss()-trailing_step>sl || sell.StopLoss()==0)
+              {
+               //--- If we trail at any profit or position profit in points exceeds the trailing start, modify StopLoss
+               if(trailing_start==0 || sell.ProfitInPoints()>(int)trailing_start)
+                  trade.PositionModify(sell.Ticket(),sl,sell.TakeProfit());
+              }
+           }
+        }
+     }
+  }
+//+------------------------------------------------------------------+
+//| Trailing the farthest pending orders                             |
+//+------------------------------------------------------------------+
+void TrailingOrders(void)
+  {
+   MqlTick tick;
+   if(!SymbolInfoTick(Symbol(),tick))
+      return;
+   double stop_level=StopLevel(Symbol(),2)*Point();
+//--- Get the list of all placed orders
+   CArrayObj* list=engine.GetListMarketPendings();
+//--- Select only Buy orders from the list
+   CArrayObj* list_buy=CSelect::ByOrderProperty(list,ORDER_PROP_DIRECTION,ORDER_TYPE_BUY,EQUAL);
+   //--- Sort the list by distance from the price in points (by profit in points)
+   list_buy.Sort(SORT_BY_ORDER_PROFIT_PT);
+   //--- Get the index of the Buy order with the greatest distance
+   int index_buy=CSelect::FindOrderMax(list_buy,ORDER_PROP_PROFIT_PT);
+   if(index_buy>WRONG_VALUE)
+     {
+      COrder* buy=list_buy.At(index_buy);
+      if(buy!=NULL)
+        {
+         //--- If the order is below the price (BuyLimit) and it should be "elevated" following the price
+         if(buy.TypeOrder()==ORDER_TYPE_BUY_LIMIT)
+           {
+            //--- Calculate the new order price and stop levels based on it
+            double price=NormalizeDouble(tick.ask-trailing_stop,Digits());
+            double sl=(buy.StopLoss()>0 ? NormalizeDouble(price-(buy.PriceOpen()-buy.StopLoss()),Digits()) : 0);
+            double tp=(buy.TakeProfit()>0 ? NormalizeDouble(price+(buy.TakeProfit()-buy.PriceOpen()),Digits()) : 0);
+            //--- If the calculated price is below the StopLevel distance based on Ask order price (the distance by StopLevel is maintained)
+            if(price<tick.ask-stop_level) 
+              {
+               //--- If the calculated price exceeds the trailing step based on the order placement price, modify the order price
+               if(price>buy.PriceOpen()+trailing_step)
+                 {
+                  trade.OrderModify(buy.Ticket(),price,sl,tp,trade.RequestTypeTime(),trade.RequestExpiration(),buy.PriceStopLimit());
+                 }
+              }
+           }
+         //--- If the order exceeds the price (BuyStop and BuyStopLimit), and it should be "decreased" following the price
+         else
+           {
+            //--- Calculate the new order price and stop levels based on it
+            double price=NormalizeDouble(tick.ask+trailing_stop,Digits());
+            double sl=(buy.StopLoss()>0 ? NormalizeDouble(price-(buy.PriceOpen()-buy.StopLoss()),Digits()) : 0);
+            double tp=(buy.TakeProfit()>0 ? NormalizeDouble(price+(buy.TakeProfit()-buy.PriceOpen()),Digits()) : 0);
+            //--- If the calculated price exceeds the StopLevel based on Ask order price (the distance by StopLevel is maintained)
+            if(price>tick.ask+stop_level) 
+              {
+               //--- If the calculated price is lower than the trailing step based on order price, modify the order price
+               if(price<buy.PriceOpen()-trailing_step)
+                 {
+                  trade.OrderModify(buy.Ticket(),price,sl,tp,trade.RequestTypeTime(),trade.RequestExpiration(),(buy.PriceStopLimit()>0 ? price-distance_stoplimit*Point() : 0));
+                 }
+              }
+           }
+        }
+     }
+//--- Select only Sell order from the list
+   CArrayObj* list_sell=CSelect::ByOrderProperty(list,ORDER_PROP_DIRECTION,ORDER_TYPE_SELL,EQUAL);
+   //--- Sort the list by distance from the price in points (by profit in points)
+   list_sell.Sort(SORT_BY_ORDER_PROFIT_PT);
+   //--- Get the index of the Sell order having the greatest distance
+   int index_sell=CSelect::FindOrderMax(list_sell,ORDER_PROP_PROFIT_PT);
+   if(index_sell>WRONG_VALUE)
+     {
+      COrder* sell=list_sell.At(index_sell);
+      if(sell!=NULL)
+        {
+         //--- If the order exceeds the price (SellLimit), and it needs to be "decreased" following the price
+         if(sell.TypeOrder()==ORDER_TYPE_SELL_LIMIT)
+           {
+            //--- Calculate the new order price and stop levels based on it
+            double price=NormalizeDouble(tick.bid+trailing_stop,Digits());
+            double sl=(sell.StopLoss()>0 ? NormalizeDouble(price+(sell.StopLoss()-sell.PriceOpen()),Digits()) : 0);
+            double tp=(sell.TakeProfit()>0 ? NormalizeDouble(price-(sell.PriceOpen()-sell.TakeProfit()),Digits()) : 0);
+            //--- If the calculated price exceeds the StopLevel distance based on the Bid order price (the distance by StopLevel is maintained)
+            if(price>tick.bid+stop_level) 
+              {
+               //--- If the calculated price is lower than the trailing step based on order price, modify the order price
+               if(price<sell.PriceOpen()-trailing_step)
+                 {
+                  trade.OrderModify(sell.Ticket(),price,sl,tp,trade.RequestTypeTime(),trade.RequestExpiration(),sell.PriceStopLimit());
+                 }
+              }
+           }
+         //--- If the order is below the price (SellStop and SellStopLimit), and it should be "elevated" following the price
+         else
+           {
+            //--- Calculate the new order price and stop levels based on it
+            double price=NormalizeDouble(tick.bid-trailing_stop,Digits());
+            double sl=(sell.StopLoss()>0 ? NormalizeDouble(price+(sell.StopLoss()-sell.PriceOpen()),Digits()) : 0);
+            double tp=(sell.TakeProfit()>0 ? NormalizeDouble(price-(sell.PriceOpen()-sell.TakeProfit()),Digits()) : 0);
+            //--- If the calculated price is below the StopLevel distance based on the Bid order price (the distance by StopLevel is maintained)
+            if(price<tick.bid-stop_level) 
+              {
+               //--- If the calculated price exceeds the trailing step based on the order placement price, modify the order price
+               if(price>sell.PriceOpen()+trailing_step)
+                 {
+                  trade.OrderModify(sell.Ticket(),price,sl,tp,trade.RequestTypeTime(),trade.RequestExpiration(),(sell.PriceStopLimit()>0 ? price+distance_stoplimit*Point() : 0));
+                 }
+              }
+           }
+        }
      }
   }
 //+------------------------------------------------------------------+

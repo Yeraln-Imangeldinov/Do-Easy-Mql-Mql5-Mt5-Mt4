@@ -53,12 +53,12 @@ bool CEventOrderRemoved::SupportProperty(ENUM_EVENT_PROP_DOUBLE property)
 void CEventOrderRemoved::PrintShort(void)
   {
    string head="- "+this.TypeEventDescription()+": "+TimeMSCtoString(this.TimePosition())+" -\n";
-   string sl=(this.PriceStopLoss()>0 ? ", sl "+::DoubleToString(this.PriceStopLoss(),(int)::SymbolInfoInteger(this.Symbol(),SYMBOL_DIGITS)) : "");
-   string tp=(this.PriceTakeProfit()>0 ? ", tp "+::DoubleToString(this.PriceTakeProfit(),(int)::SymbolInfoInteger(this.Symbol(),SYMBOL_DIGITS)) : "");
+   string sl=(this.PriceStopLoss()>0 ? ", sl "+::DoubleToString(this.PriceStopLoss(),this.m_digits) : "");
+   string tp=(this.PriceTakeProfit()>0 ? ", tp "+::DoubleToString(this.PriceTakeProfit(),this.m_digits) : "");
    string vol=::DoubleToString(this.VolumeOrderInitial(),DigitsLots(this.Symbol()));
    string magic=(this.Magic()!=0 ? TextByLanguage(", магик ",", magic ")+(string)this.Magic() : "");
    string type=this.TypeOrderFirstDescription()+" #"+(string)this.TicketOrderEvent();
-   string price=TextByLanguage(" по цене "," at price ")+::DoubleToString(this.PriceOpen(),(int)::SymbolInfoInteger(this.Symbol(),SYMBOL_DIGITS));
+   string price=TextByLanguage(" по цене "," at price ")+::DoubleToString(this.PriceOpen(),this.m_digits);
    string txt=head+this.Symbol()+TextByLanguage(" Удалён "," Deleted ")+vol+" "+type+price+sl+tp+magic;
    ::Print(txt);
   }

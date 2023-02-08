@@ -17,6 +17,7 @@
 #include "..\Objects\Events\EventOrderRemoved.mqh"
 #include "..\Objects\Events\EventPositionOpen.mqh"
 #include "..\Objects\Events\EventPositionClose.mqh"
+#include "..\Objects\Events\EventModify.mqh"
 //+------------------------------------------------------------------+
 //| Collection of account events                                     |
 //+------------------------------------------------------------------+
@@ -29,6 +30,7 @@ private:
    int               m_trade_event_code;              // Trading event code
    ENUM_TRADE_EVENT  m_trade_event;                   // Account trading event
    CEvent            m_event_instance;                // Event object for searching by property
+   MqlTick           m_tick;                          // Last tick structure
    
 //--- Create a trading event depending on the (1) order status and (2) change type
    void              CreateNewEvent(COrder* order,CArrayObj* list_history,CArrayObj* list_market);
@@ -65,6 +67,7 @@ private:
    bool              IsPresentEventInList(CEvent* compared_event);
 //--- The handler of an existing order/position change event
    void              OnChangeEvent(CArrayObj* list_changes,const int index);
+
 public:
 //--- Select events from the collection with time within the range from begin_time to end_time
    CArrayObj        *GetListByTime(const datetime begin_time=0,const datetime end_time=0);
@@ -103,6 +106,7 @@ CEventsCollection::CEventsCollection(void) : m_trade_event(TRADE_EVENT_NO_EVENT)
    this.m_list_events.Type(COLLECTION_EVENTS_ID);
    this.m_is_hedge=bool(::AccountInfoInteger(ACCOUNT_MARGIN_MODE)==ACCOUNT_MARGIN_MODE_RETAIL_HEDGING);
    this.m_chart_id=::ChartID();
+   ::ZeroMemory(this.m_tick);
   }
 //+------------------------------------------------------------------+
 //| Update the event list                                            |
@@ -207,10 +211,7 @@ void CEventsCollection::OnChangeEvent(CArrayObj* list_changes,const int index)
    COrderControl* order_changed=list_changes.Detach(index);
    if(order_changed!=NULL)
      {
-      if(order_changed.GetChangeType()==CHANGE_TYPE_ORDER_TYPE)
-        {
-         this.CreateNewEvent(order_changed);
-        }
+      this.CreateNewEvent(order_changed);
       delete order_changed;
      }
   }
@@ -219,19 +220,62 @@ void CEventsCollection::OnChangeEvent(CArrayObj* list_changes,const int index)
 //+------------------------------------------------------------------+
 void CEventsCollection::CreateNewEvent(COrderControl* order)
   {
+   if(!::SymbolInfoTick(order.Symbol(),this.m_tick))
+     {
+      Print(DFUN,TextByLanguage("Не удалось получить текущие цены по символу события ","Failed to get current prices by event symbol "),order.Symbol());
+      return;
+     }
    CEvent* event=NULL;
-//--- Pending StopLimit order placed
+//--- Pending StopLimit order is activated
    if(order.GetChangeType()==CHANGE_TYPE_ORDER_TYPE)
      {
       this.m_trade_event_code=TRADE_EVENT_FLAG_ORDER_PLASED;
       event=new CEventOrderPlased(this.m_trade_event_code,order.Ticket());
      }
-//--- 
+//--- Modification
+   else
+     {
+      //--- Pending order price is modified
+      if(order.GetChangeType()==CHANGE_TYPE_ORDER_PRICE)
+         this.m_trade_event_code=TRADE_EVENT_FLAG_ORDER_MODIFY+TRADE_EVENT_FLAG_PRICE;
+      //--- Pending order price and StopLoss are modified
+      else if(order.GetChangeType()==CHANGE_TYPE_ORDER_PRICE_STOP_LOSS)
+         this.m_trade_event_code=TRADE_EVENT_FLAG_ORDER_MODIFY+TRADE_EVENT_FLAG_PRICE+TRADE_EVENT_FLAG_SL;
+      //--- Pending order price and TakeProfit are modified
+      else if(order.GetChangeType()==CHANGE_TYPE_ORDER_PRICE_TAKE_PROFIT)
+         this.m_trade_event_code=TRADE_EVENT_FLAG_ORDER_MODIFY+TRADE_EVENT_FLAG_PRICE+TRADE_EVENT_FLAG_TP;
+      //--- Pending order price, as well as its StopLoss and TakeProfit are modified
+      else if(order.GetChangeType()==CHANGE_TYPE_ORDER_PRICE_STOP_LOSS_TAKE_PROFIT)
+         this.m_trade_event_code=TRADE_EVENT_FLAG_ORDER_MODIFY+TRADE_EVENT_FLAG_PRICE+TRADE_EVENT_FLAG_SL+TRADE_EVENT_FLAG_TP;
+      //--- Pending order StopLoss is modified
+      else if(order.GetChangeType()==CHANGE_TYPE_ORDER_STOP_LOSS)
+         this.m_trade_event_code=TRADE_EVENT_FLAG_ORDER_MODIFY+TRADE_EVENT_FLAG_SL;
+      //--- Pending order TakeProfit is modified
+      else if(order.GetChangeType()==CHANGE_TYPE_ORDER_TAKE_PROFIT)
+         this.m_trade_event_code=TRADE_EVENT_FLAG_ORDER_MODIFY+TRADE_EVENT_FLAG_TP;
+      //--- Pending order StopLoss and TakeProfit are modified
+      else if(order.GetChangeType()==CHANGE_TYPE_ORDER_STOP_LOSS_TAKE_PROFIT)
+         this.m_trade_event_code=TRADE_EVENT_FLAG_ORDER_MODIFY+TRADE_EVENT_FLAG_SL+TRADE_EVENT_FLAG_TP;
+
+      //--- Position StopLoss is modified
+      else if(order.GetChangeType()==CHANGE_TYPE_POSITION_STOP_LOSS)
+         this.m_trade_event_code=TRADE_EVENT_FLAG_POSITION_MODIFY+TRADE_EVENT_FLAG_SL;
+      //--- Position TakeProfit is modified
+      else if(order.GetChangeType()==CHANGE_TYPE_POSITION_TAKE_PROFIT)
+         this.m_trade_event_code=TRADE_EVENT_FLAG_POSITION_MODIFY+TRADE_EVENT_FLAG_TP;
+      //--- Position StopLoss and TakeProfit are modified
+      else if(order.GetChangeType()==CHANGE_TYPE_POSITION_STOP_LOSS_TAKE_PROFIT)
+         this.m_trade_event_code=TRADE_EVENT_FLAG_POSITION_MODIFY+TRADE_EVENT_FLAG_SL+TRADE_EVENT_FLAG_TP;
+      
+      //--- Create a modification event
+      event=new CEventModify(this.m_trade_event_code,order.Ticket());
+     }
+//--- Create an event
    if(event!=NULL)
      {
       event.SetProperty(EVENT_PROP_TIME_EVENT,order.Time());                        // Event time
       event.SetProperty(EVENT_PROP_REASON_EVENT,EVENT_REASON_STOPLIMIT_TRIGGERED);  // Event reason (from the ENUM_EVENT_REASON enumeration)
-      event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,order.TypeOrderPrev());          // Type of the order that triggered an event
+      event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,PositionTypeByOrderType((ENUM_ORDER_TYPE)order.TypeOrderPrev())); // Type of the order that triggered an event
       event.SetProperty(EVENT_PROP_TICKET_DEAL_EVENT,order.Ticket());               // Ticket of the order that triggered an event
       event.SetProperty(EVENT_PROP_TYPE_ORDER_EVENT,order.TypeOrder());             // Event order type
       event.SetProperty(EVENT_PROP_TICKET_ORDER_EVENT,order.Ticket());              // Event order ticket
@@ -245,6 +289,12 @@ void CEventsCollection::CreateNewEvent(COrderControl* order)
       event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,order.Ticket());           // Position order ticket before changing direction
       event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,order.TypeOrder());         // Current position order type
       event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,order.Ticket());          // Current position order ticket
+      
+      event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order.PricePrev());            // Order price before modification
+      event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order.StopLossPrev());           // StopLoss price before modification
+      event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order.TakeProfitPrev());         // TakeProfit price before modification
+      event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,this.m_tick.ask);                // Ask price during an event
+      event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,this.m_tick.bid);                // Bid price during an event
          
       event.SetProperty(EVENT_PROP_MAGIC_ORDER,order.Magic());                      // Order magic number
       event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order.TimePrev());           // Position first order time
@@ -284,6 +334,11 @@ void CEventsCollection::CreateNewEvent(COrderControl* order)
 //+------------------------------------------------------------------+
 void CEventsCollection::CreateNewEvent(COrder* order,CArrayObj* list_history,CArrayObj* list_market)
   {
+   if(!::SymbolInfoTick(order.Symbol(),this.m_tick))
+     {
+      Print(DFUN,TextByLanguage("Не удалось получить текущие цены по символу события ","Failed to get current prices by event symbol "),order.Symbol());
+      return;
+     }
    this.m_trade_event_code=TRADE_EVENT_FLAG_NO_EVENT;
    ENUM_ORDER_STATUS status=order.Status();
 //--- Pending order placed
@@ -295,7 +350,7 @@ void CEventsCollection::CreateNewEvent(COrder* order,CArrayObj* list_history,CAr
         {
          event.SetProperty(EVENT_PROP_TIME_EVENT,order.TimeOpenMSC());                             // Event time
          event.SetProperty(EVENT_PROP_REASON_EVENT,EVENT_REASON_DONE);                             // Event reason (from the ENUM_EVENT_REASON enumeration)
-         event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,order.TypeOrder());                          // Event deal type
+         event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,order.TypeByDirection());                    // Event deal type
          event.SetProperty(EVENT_PROP_TICKET_DEAL_EVENT,order.Ticket());                           // Event order ticket
          event.SetProperty(EVENT_PROP_TYPE_ORDER_EVENT,order.TypeOrder());                         // Event order type
          event.SetProperty(EVENT_PROP_TYPE_ORDER_POSITION,order.TypeOrder());                      // Event order type
@@ -303,16 +358,22 @@ void CEventsCollection::CreateNewEvent(COrder* order,CArrayObj* list_history,CAr
          event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,order.Ticket());                       // Order ticket
          event.SetProperty(EVENT_PROP_POSITION_ID,order.PositionID());                             // Position ID
          event.SetProperty(EVENT_PROP_POSITION_BY_ID,order.PositionByID());                        // Opposite position ID
-         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,order.Magic());                                  // Opposite position magic number
+         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,0);                                              // Opposite position magic number
             
          event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,order.TypeOrder());                      // Position order type before changing direction
          event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,order.Ticket());                       // Position order ticket before changing direction
          event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,order.TypeOrder());                     // Current position order type
          event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,order.Ticket());                      // Current position order ticket
-            
+      
+         event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order.PriceOpen());                        // Order price before modification
+         event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order.StopLoss());                           // StopLoss price before modification
+         event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order.TakeProfit());                         // TakeProfit price before modification
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,this.m_tick.ask);                            // Ask price during an event
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,this.m_tick.bid);                            // Bid price during an event
+         
          event.SetProperty(EVENT_PROP_MAGIC_ORDER,order.Magic());                                  // Order magic number
          event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order.TimeOpenMSC());                    // Order time
-         event.SetProperty(EVENT_PROP_PRICE_EVENT,order.PriceOpen());                              // Event price
+         event.SetProperty(EVENT_PROP_PRICE_EVENT,this.m_tick.bid);                                // Bid price an event occurred on
          event.SetProperty(EVENT_PROP_PRICE_OPEN,order.PriceOpen());                               // Order placement price
          event.SetProperty(EVENT_PROP_PRICE_CLOSE,order.PriceClose());                             // Order closure price
          event.SetProperty(EVENT_PROP_PRICE_SL,order.StopLoss());                                  // StopLoss order price
@@ -357,7 +418,7 @@ void CEventsCollection::CreateNewEvent(COrder* order,CArrayObj* list_history,CAr
            );
          event.SetProperty(EVENT_PROP_TIME_EVENT,order.TimeCloseMSC());                            // Event time
          event.SetProperty(EVENT_PROP_REASON_EVENT,reason);                                        // Event reason (from the ENUM_EVENT_REASON enumeration)
-         event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,order.TypeOrder());                          // Event order type
+         event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,order.TypeByDirection());                    // Event order type
          event.SetProperty(EVENT_PROP_TICKET_DEAL_EVENT,order.Ticket());                           // Event order ticket
          event.SetProperty(EVENT_PROP_TYPE_ORDER_EVENT,order.TypeOrder());                         // Type of the order that triggered an event deal (the last position order)
          event.SetProperty(EVENT_PROP_TYPE_ORDER_POSITION,order.TypeOrder());                      // Type of the order that triggered a position deal (the first position order)
@@ -365,16 +426,22 @@ void CEventsCollection::CreateNewEvent(COrder* order,CArrayObj* list_history,CAr
          event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,order.Ticket());                       // Ticket of the order, based on which a position deal is opened (the first position order)
          event.SetProperty(EVENT_PROP_POSITION_ID,order.PositionID());                             // Position ID
          event.SetProperty(EVENT_PROP_POSITION_BY_ID,order.PositionByID());                        // Opposite position ID
-         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,order.Magic());                                  // Opposite position magic number
+         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,0);                                              // Opposite position magic number
             
          event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,order.TypeOrder());                      // Position order type before changing direction
          event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,order.Ticket());                       // Position order ticket before changing direction
          event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,order.TypeOrder());                     // Current position order type
          event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,order.Ticket());                      // Current position order ticket
-            
+      
+         event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order.PriceOpen());                        // Order price before modification
+         event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order.StopLoss());                           // StopLoss price before modification
+         event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order.TakeProfit());                         // TakeProfit price before modification
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,this.m_tick.ask);                            // Ask price during an event
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,this.m_tick.bid);                            // Bid price during an event
+         
          event.SetProperty(EVENT_PROP_MAGIC_ORDER,order.Magic());                                  // Order magic number
          event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order.TimeOpenMSC());                    // Time of the order, based on which a position deal is opened (the first position order)
-         event.SetProperty(EVENT_PROP_PRICE_EVENT,order.PriceOpen());                              // Event price
+         event.SetProperty(EVENT_PROP_PRICE_EVENT,this.m_tick.bid);                                // Bid price an event occurred on
          event.SetProperty(EVENT_PROP_PRICE_OPEN,order.PriceOpen());                               // Order placement price
          event.SetProperty(EVENT_PROP_PRICE_CLOSE,order.PriceClose());                             // Order closure price
          event.SetProperty(EVENT_PROP_PRICE_SL,order.StopLoss());                                  // StopLoss order price
@@ -422,13 +489,19 @@ void CEventsCollection::CreateNewEvent(COrder* order,CArrayObj* list_history,CAr
          event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,order.Ticket());                       // Ticket of the order, based on which a position deal is opened (the first position order)
          event.SetProperty(EVENT_PROP_POSITION_ID,order.PositionID());                             // Position ID
          event.SetProperty(EVENT_PROP_POSITION_BY_ID,order.PositionByID());                        // Opposite position ID
-         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,order.Magic());                                  // Opposite position magic number
+         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,0);                                              // Opposite position magic number
             
          event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,order.TypeOrder());                      // Position order type before changing direction
          event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,order.Ticket());                       // Position order ticket before changing direction
          event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,order.TypeOrder());                     // Current position order type
          event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,order.Ticket());                      // Current position order ticket
-            
+      
+         event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order.PriceOpen());                        // Order price before modification
+         event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order.StopLoss());                           // StopLoss price before modification
+         event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order.TakeProfit());                         // TakeProfit price before modification
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,this.m_tick.ask);                            // Ask price during an event
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,this.m_tick.bid);                            // Bid price during an event
+         
          event.SetProperty(EVENT_PROP_MAGIC_ORDER,order.Magic());                                  // Order/deal/position magic number
          event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order.TimeOpen());                       // Time of an order, based on which a position deal is opened (the first position order)
          event.SetProperty(EVENT_PROP_PRICE_EVENT,order.PriceOpen());                              // Event price
@@ -487,13 +560,19 @@ void CEventsCollection::CreateNewEvent(COrder* order,CArrayObj* list_history,CAr
             event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,order.Ticket());           // Ticket of the order, based on which a position deal is opened (the first position order)
             event.SetProperty(EVENT_PROP_POSITION_ID,order.PositionID());                 // Position ID
             event.SetProperty(EVENT_PROP_POSITION_BY_ID,order.PositionByID());            // Opposite position ID
-            event.SetProperty(EVENT_PROP_MAGIC_BY_ID,order.Magic());                      // Opposite position magic number
+            event.SetProperty(EVENT_PROP_MAGIC_BY_ID,0);                                  // Opposite position magic number
             
             event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,order.TypeOrder());          // Position order type before changing direction
             event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,order.Ticket());           // Position order ticket before changing direction
             event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,order.TypeOrder());         // Current position order type
             event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,order.Ticket());          // Current position order ticket
-            
+      
+            event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order.PriceOpen());            // Order price before modification
+            event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order.StopLoss());               // StopLoss price before modification
+            event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order.TakeProfit());             // TakeProfit price before modification
+            event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,this.m_tick.ask);                // Ask price during an event
+            event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,this.m_tick.bid);                // Bid price during an event
+         
             event.SetProperty(EVENT_PROP_MAGIC_ORDER,order.Magic());                      // Order/deal/position magic number
             event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order.TimeOpenMSC());        // Time of the order, based on which a position deal is opened (the first position order)
             event.SetProperty(EVENT_PROP_PRICE_EVENT,order.PriceOpen());                  // Event price
@@ -542,6 +621,8 @@ void CEventsCollection::CreateNewEvent(COrder* order,CArrayObj* list_history,CAr
 //+------------------------------------------------------------------+
 void CEventsCollection::NewDealEventHedge(COrder* deal,CArrayObj* list_history,CArrayObj* list_market)
   {
+   double ask=::SymbolInfoDouble(deal.Symbol(),SYMBOL_ASK);
+   double bid=::SymbolInfoDouble(deal.Symbol(),SYMBOL_BID);
    //--- Market entry
    if(deal.GetProperty(ORDER_PROP_DEAL_ENTRY)==DEAL_ENTRY_IN)
      {
@@ -592,12 +673,18 @@ void CEventsCollection::NewDealEventHedge(COrder* deal,CArrayObj* list_history,C
             event.SetProperty(EVENT_PROP_POSITION_ID,deal.PositionID());                        // Position ID
             event.SetProperty(EVENT_PROP_POSITION_BY_ID,order_last.PositionByID());             // Opposite position ID
             //---
-            event.SetProperty(EVENT_PROP_MAGIC_BY_ID,deal.Magic());                             // Opposite position magic number
+            event.SetProperty(EVENT_PROP_MAGIC_BY_ID,0);                                        // Opposite position magic number
             event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,order_first.TypeOrder());          // Position order type before changing direction
             event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,order_first.Ticket());           // Position order ticket before changing direction
             event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,order_first.TypeOrder());         // Current position order type
             event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,order_first.Ticket());          // Current position order ticket
             event.SetProperty(EVENT_PROP_SYMBOL_BY_ID,deal.Symbol());                           // Opposite position symbol
+            //---
+            event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order_first.PriceOpen());            // Order price before modification
+            event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order_first.StopLoss());               // StopLoss price before modification
+            event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order_first.TakeProfit());             // TakeProfit price before modification
+            event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,ask);                                  // Ask price during an event
+            event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,bid);                                  // Bid price during an event
             //---
             event.SetProperty(EVENT_PROP_MAGIC_ORDER,deal.Magic());                             // Order/deal/position magic number
             event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order_first.TimeOpenMSC());        // Time of the order, based on which a position deal is opened (the first position order)
@@ -690,12 +777,18 @@ void CEventsCollection::NewDealEventHedge(COrder* deal,CArrayObj* list_history,C
             event.SetProperty(EVENT_PROP_POSITION_ID,deal.PositionID());                        // Position ID
             event.SetProperty(EVENT_PROP_POSITION_BY_ID,order_last.PositionByID());             // Opposite position ID
             //---
-            event.SetProperty(EVENT_PROP_MAGIC_BY_ID,order_last.Magic());                       // Opposite position magic number
+            event.SetProperty(EVENT_PROP_MAGIC_BY_ID,0);                                        // Opposite position magic number
             event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,order_first.TypeOrder());          // Position order type before changing direction
             event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,order_first.Ticket());           // Position order ticket before changing direction
             event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,order_first.TypeOrder());         // Current position order type
             event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,order_first.Ticket());          // Current position order ticket
             event.SetProperty(EVENT_PROP_SYMBOL_BY_ID,order_last.Symbol());                     // Opposite position symbol
+            //---
+            event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order_first.PriceOpen());            // Order price before modification
+            event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order_first.StopLoss());               // StopLoss price before modification
+            event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order_first.TakeProfit());             // TakeProfit price before modification
+            event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,ask);                                  // Ask price during an event
+            event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,bid);                                  // Bid price during an event
             //---
             event.SetProperty(EVENT_PROP_MAGIC_ORDER,deal.Magic());                             // Order/deal/position magic number
             event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order_first.TimeOpenMSC());        // Time of the order, based on which a position deal is opened (the first position order)
@@ -800,6 +893,12 @@ void CEventsCollection::NewDealEventHedge(COrder* deal,CArrayObj* list_history,C
             event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,order_first.Ticket());          // Current position order ticket
             event.SetProperty(EVENT_PROP_SYMBOL_BY_ID,order_close_by.Symbol());                 // Opposite position symbol
             //---
+            event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order_first.PriceOpen());            // Order price before modification
+            event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order_first.StopLoss());               // StopLoss price before modification
+            event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order_first.TakeProfit());             // TakeProfit price before modification
+            event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,ask);                                  // Ask price during an event
+            event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,bid);                                  // Bid price during an event
+            //---
             event.SetProperty(EVENT_PROP_MAGIC_ORDER,deal.Magic());                             // Order/deal/position magic number
             event.SetProperty(EVENT_PROP_PRICE_EVENT,deal.PriceOpen());                         // Event price
             event.SetProperty(EVENT_PROP_PRICE_OPEN,order_first.PriceOpen());                   // Order/deal/position open price
@@ -838,6 +937,8 @@ void CEventsCollection::NewDealEventHedge(COrder* deal,CArrayObj* list_history,C
 //+------------------------------------------------------------------+
 void CEventsCollection::NewDealEventNetto(COrder *deal,CArrayObj *list_history,CArrayObj *list_market)
   {
+   double ask=::SymbolInfoDouble(deal.Symbol(),SYMBOL_ASK);
+   double bid=::SymbolInfoDouble(deal.Symbol(),SYMBOL_BID);
 //--- Prepare position history data
 //--- Lists of all deals and position direction changes
    CArrayObj* list_deals=this.GetListAllDealsByPosID(list_history,deal.PositionID());
@@ -929,39 +1030,45 @@ void CEventsCollection::NewDealEventNetto(COrder *deal,CArrayObj *list_history,C
       if(event!=NULL)
         {
          //--- Event deal parameters
-         event.SetProperty(EVENT_PROP_TIME_EVENT,deal.TimeOpenMSC());                  // Event time (position open time)
-         event.SetProperty(EVENT_PROP_REASON_EVENT,reason);                            // Event reason (from the ENUM_EVENT_REASON enumeration)
-         event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,deal.TypeOrder());               // Event deal type
-         event.SetProperty(EVENT_PROP_TICKET_DEAL_EVENT,deal.Ticket());                // Event deal ticket
-         event.SetProperty(EVENT_PROP_MAGIC_ORDER,deal.Magic());                       // Order/deal/position magic number
-         event.SetProperty(EVENT_PROP_PRICE_EVENT,deal.PriceOpen());                   // Event price (position open price)
-         event.SetProperty(EVENT_PROP_PROFIT,deal.ProfitFull());                       // Profit
-         event.SetProperty(EVENT_PROP_SYMBOL,deal.Symbol());                           // Order symbol
-         event.SetProperty(EVENT_PROP_SYMBOL_BY_ID,deal.Symbol());                     // Opposite position symbol
-         event.SetProperty(EVENT_PROP_POSITION_ID,deal.PositionID());                  // Position ID
+         event.SetProperty(EVENT_PROP_TIME_EVENT,deal.TimeOpenMSC());                     // Event time (position open time)
+         event.SetProperty(EVENT_PROP_REASON_EVENT,reason);                               // Event reason (from the ENUM_EVENT_REASON enumeration)
+         event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,deal.TypeOrder());                  // Event deal type
+         event.SetProperty(EVENT_PROP_TICKET_DEAL_EVENT,deal.Ticket());                   // Event deal ticket
+         event.SetProperty(EVENT_PROP_MAGIC_ORDER,deal.Magic());                          // Order/deal/position magic number
+         event.SetProperty(EVENT_PROP_PRICE_EVENT,deal.PriceOpen());                      // Event price (position open price)
+         event.SetProperty(EVENT_PROP_PROFIT,deal.ProfitFull());                          // Profit
+         event.SetProperty(EVENT_PROP_SYMBOL,deal.Symbol());                              // Order symbol
+         event.SetProperty(EVENT_PROP_SYMBOL_BY_ID,deal.Symbol());                        // Opposite position symbol
+         event.SetProperty(EVENT_PROP_POSITION_ID,deal.PositionID());                     // Position ID
          
          //--- Event order parameters
-         event.SetProperty(EVENT_PROP_TYPE_ORDER_EVENT,type_order_last_deal);          // Type of the order that triggered an event deal (the last position order)
-         event.SetProperty(EVENT_PROP_TICKET_ORDER_EVENT,ticket_order_last_deal);      // Ticket of the order, based on which an event deal is opened (the last position order)
-         event.SetProperty(EVENT_PROP_POSITION_BY_ID,order_last_deal.PositionByID());  // Opposite position ID
-         event.SetProperty(EVENT_PROP_PRICE_CLOSE,order_last_deal.PriceClose());       // Order close price (the last position order close price)
-         event.SetProperty(EVENT_PROP_VOLUME_ORDER_INITIAL,order_last_deal.Volume());  // Requested order volume
-         event.SetProperty(EVENT_PROP_VOLUME_ORDER_EXECUTED,vol_order_done);           // Executed order volume
-         event.SetProperty(EVENT_PROP_VOLUME_ORDER_CURRENT,vol_order_current);         // Remaining (unexecuted) order volume
-         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,deal.Magic());                       // Opposite position magic number
+         event.SetProperty(EVENT_PROP_TYPE_ORDER_EVENT,type_order_last_deal);             // Type of the order that triggered an event deal (the last position order)
+         event.SetProperty(EVENT_PROP_TICKET_ORDER_EVENT,ticket_order_last_deal);         // Ticket of the order, based on which an event deal is opened (the last position order)
+         event.SetProperty(EVENT_PROP_POSITION_BY_ID,order_last_deal.PositionByID());     // Opposite position ID
+         event.SetProperty(EVENT_PROP_PRICE_CLOSE,order_last_deal.PriceClose());          // Order close price (the last position order close price)
+         event.SetProperty(EVENT_PROP_VOLUME_ORDER_INITIAL,order_last_deal.Volume());     // Requested order volume
+         event.SetProperty(EVENT_PROP_VOLUME_ORDER_EXECUTED,vol_order_done);              // Executed order volume
+         event.SetProperty(EVENT_PROP_VOLUME_ORDER_CURRENT,vol_order_current);            // Remaining (unexecuted) order volume
+         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,0);                                     // Opposite position magic number
             
          //--- Position parameters
-         event.SetProperty(EVENT_PROP_TYPE_ORDER_POSITION,type_order_first_deal);      // Type of the order that triggered the first position deal
-         event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,ticket_order_first_deal);  // Ticket of the order, based on which a position deal is opened (the first position order)
-         event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order_first_deal.TimeOpenMSC());  // Time of the order, based on which a position deal is opened (the first position order)
-         event.SetProperty(EVENT_PROP_PRICE_OPEN,order_first_deal.PriceOpen());        // Position first order open price
-         event.SetProperty(EVENT_PROP_PRICE_SL,order_first_deal.StopLoss());           // StopLoss price (Position order StopLoss price)
-         event.SetProperty(EVENT_PROP_PRICE_TP,order_first_deal.TakeProfit());         // TakeProfit price (Position order TakeProfit price)
-         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,type_position_previous);     // Position type before changing the direction
-         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,ticket_position_previous); // Position order ticket before changing direction
-         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,type_position_current);     // Current position order type
-         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,ticket_position_current); // Current position order ticket
-         event.SetProperty(EVENT_PROP_VOLUME_POSITION_EXECUTED,vol_position);          // Executed position volume
+         event.SetProperty(EVENT_PROP_TYPE_ORDER_POSITION,type_order_first_deal);         // Type of the order that triggered the first position deal
+         event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,ticket_order_first_deal);     // Ticket of the order, based on which a position deal is opened (the first position order)
+         event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order_first_deal.TimeOpenMSC());// Time of the order, based on which a position deal is opened (the first position order)
+         event.SetProperty(EVENT_PROP_PRICE_OPEN,order_first_deal.PriceOpen());           // Position first order open price
+         event.SetProperty(EVENT_PROP_PRICE_SL,order_first_deal.StopLoss());              // StopLoss price (Position order StopLoss price)
+         event.SetProperty(EVENT_PROP_PRICE_TP,order_first_deal.TakeProfit());            // TakeProfit price (Position order TakeProfit price)
+         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,type_position_previous);        // Position type before changing the direction
+         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,ticket_position_previous);    // Position order ticket before changing direction
+         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,type_position_current);        // Current position order type
+         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,ticket_position_current);    // Current position order ticket
+         event.SetProperty(EVENT_PROP_VOLUME_POSITION_EXECUTED,vol_position);             // Executed position volume
+
+         event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order_first_deal.PriceOpen());    // Order price before modification
+         event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order_first_deal.StopLoss());       // StopLoss price before modification
+         event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order_first_deal.TakeProfit());     // TakeProfit price before modification
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,ask);                               // Ask price during an event
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,bid);                               // Bid price during an event
          
          //--- Set the control program chart ID, decode the event code and set the event type
          event.SetChartID(this.m_chart_id);
@@ -1008,39 +1115,45 @@ void CEventsCollection::NewDealEventNetto(COrder *deal,CArrayObj *list_history,C
       if(event!=NULL)
         {
          //--- Event deal parameters
-         event.SetProperty(EVENT_PROP_TIME_EVENT,deal.TimeOpenMSC());                  // Event time (position open time)
-         event.SetProperty(EVENT_PROP_REASON_EVENT,reason);                            // Event reason (from the ENUM_EVENT_REASON enumeration)
-         event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,deal.TypeOrder());               // Event deal type
-         event.SetProperty(EVENT_PROP_TICKET_DEAL_EVENT,deal.Ticket());                // Event deal ticket
-         event.SetProperty(EVENT_PROP_MAGIC_ORDER,deal.Magic());                       // Order/deal/position magic number
-         event.SetProperty(EVENT_PROP_PRICE_EVENT,deal.PriceOpen());                   // Event price (position open price)
-         event.SetProperty(EVENT_PROP_PROFIT,deal.ProfitFull());                       // Profit
-         event.SetProperty(EVENT_PROP_SYMBOL,deal.Symbol());                           // Order symbol
-         event.SetProperty(EVENT_PROP_SYMBOL_BY_ID,deal.Symbol());                     // Opposite position symbol
-         event.SetProperty(EVENT_PROP_POSITION_ID,deal.PositionID());                  // Position ID
+         event.SetProperty(EVENT_PROP_TIME_EVENT,deal.TimeOpenMSC());                     // Event time (position open time)
+         event.SetProperty(EVENT_PROP_REASON_EVENT,reason);                               // Event reason (from the ENUM_EVENT_REASON enumeration)
+         event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,deal.TypeOrder());                  // Event deal type
+         event.SetProperty(EVENT_PROP_TICKET_DEAL_EVENT,deal.Ticket());                   // Event deal ticket
+         event.SetProperty(EVENT_PROP_MAGIC_ORDER,deal.Magic());                          // Order/deal/position magic number
+         event.SetProperty(EVENT_PROP_PRICE_EVENT,deal.PriceOpen());                      // Event price (position open price)
+         event.SetProperty(EVENT_PROP_PROFIT,deal.ProfitFull());                          // Profit
+         event.SetProperty(EVENT_PROP_SYMBOL,deal.Symbol());                              // Order symbol
+         event.SetProperty(EVENT_PROP_SYMBOL_BY_ID,deal.Symbol());                        // Opposite position symbol
+         event.SetProperty(EVENT_PROP_POSITION_ID,deal.PositionID());                     // Position ID
             
          //--- Event order parameters
-         event.SetProperty(EVENT_PROP_TYPE_ORDER_EVENT,type_order_last_deal);          // Type of the order that triggered an event deal (the last position order)
-         event.SetProperty(EVENT_PROP_TICKET_ORDER_EVENT,ticket_order_last_deal);      // Ticket of the order, based on which an event deal is opened (the last position order)
-         event.SetProperty(EVENT_PROP_POSITION_BY_ID,order_last_deal.PositionByID());  // Opposite position ID
-         event.SetProperty(EVENT_PROP_PRICE_CLOSE,order_last_deal.PriceClose());       // Order close price (the last position order close price)
-         event.SetProperty(EVENT_PROP_VOLUME_ORDER_INITIAL,order_last_deal.Volume());  // Requested order volume
-         event.SetProperty(EVENT_PROP_VOLUME_ORDER_EXECUTED,vol_order_done);           // Executed order volume
-         event.SetProperty(EVENT_PROP_VOLUME_ORDER_CURRENT,vol_order_current);         // Remaining (unexecuted) order volume
-         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,deal.Magic());                       // Opposite position magic number
+         event.SetProperty(EVENT_PROP_TYPE_ORDER_EVENT,type_order_last_deal);             // Type of the order that triggered an event deal (the last position order)
+         event.SetProperty(EVENT_PROP_TICKET_ORDER_EVENT,ticket_order_last_deal);         // Ticket of the order, based on which an event deal is opened (the last position order)
+         event.SetProperty(EVENT_PROP_POSITION_BY_ID,order_last_deal.PositionByID());     // Opposite position ID
+         event.SetProperty(EVENT_PROP_PRICE_CLOSE,order_last_deal.PriceClose());          // Order close price (the last position order close price)
+         event.SetProperty(EVENT_PROP_VOLUME_ORDER_INITIAL,order_last_deal.Volume());     // Requested order volume
+         event.SetProperty(EVENT_PROP_VOLUME_ORDER_EXECUTED,vol_order_done);              // Executed order volume
+         event.SetProperty(EVENT_PROP_VOLUME_ORDER_CURRENT,vol_order_current);            // Remaining (unexecuted) order volume
+         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,0);                                     // Opposite position magic number
             
          //--- Position parameters
-         event.SetProperty(EVENT_PROP_TYPE_ORDER_POSITION,type_order_first_deal);      // Type of the order that triggered the first position deal
-         event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,ticket_order_first_deal);  // Ticket of the order, based on which a position deal is opened (the first position order)
-         event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order_first_deal.TimeOpenMSC());  // Time of the order, based on which a position deal is opened (the first position order)
-         event.SetProperty(EVENT_PROP_PRICE_OPEN,order_first_deal.PriceOpen());        // Position first order open price
-         event.SetProperty(EVENT_PROP_PRICE_SL,order_first_deal.StopLoss());           // StopLoss price (Position order StopLoss price)
-         event.SetProperty(EVENT_PROP_PRICE_TP,order_first_deal.TakeProfit());         // TakeProfit price (Position order TakeProfit price)
-         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,type_position_previous);     // Position order type before changing the direction
-         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,ticket_position_previous); // Position order ticket before changing direction
-         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,type_position_current);     // Current position order type
-         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,ticket_position_current); // Current position order ticket
-         event.SetProperty(EVENT_PROP_VOLUME_POSITION_EXECUTED,vol_position);          // Executed position volume
+         event.SetProperty(EVENT_PROP_TYPE_ORDER_POSITION,type_order_first_deal);         // Type of the order that triggered the first position deal
+         event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,ticket_order_first_deal);     // Ticket of the order, based on which a position deal is opened (the first position order)
+         event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order_first_deal.TimeOpenMSC());// Time of the order, based on which a position deal is opened (the first position order)
+         event.SetProperty(EVENT_PROP_PRICE_OPEN,order_first_deal.PriceOpen());           // Position first order open price
+         event.SetProperty(EVENT_PROP_PRICE_SL,order_first_deal.StopLoss());              // StopLoss price (Position order StopLoss price)
+         event.SetProperty(EVENT_PROP_PRICE_TP,order_first_deal.TakeProfit());            // TakeProfit price (Position order TakeProfit price)
+         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,type_position_previous);        // Position order type before changing the direction
+         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,ticket_position_previous);    // Position order ticket before changing direction
+         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,type_position_current);        // Current position order type
+         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,ticket_position_current);    // Current position order ticket
+         event.SetProperty(EVENT_PROP_VOLUME_POSITION_EXECUTED,vol_position);             // Executed position volume
+
+         event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order_first_deal.PriceOpen());    // Order price before modification
+         event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order_first_deal.StopLoss());       // StopLoss price before modification
+         event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order_first_deal.TakeProfit());     // TakeProfit price before modification
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,ask);                               // Ask price during an event
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,bid);                               // Bid price during an event
          
          //--- Set the control program chart ID, decode the event code and set the event type
          event.SetChartID(this.m_chart_id);
@@ -1095,39 +1208,45 @@ void CEventsCollection::NewDealEventNetto(COrder *deal,CArrayObj *list_history,C
       if(event!=NULL)
         {
          //--- Event deal parameters
-         event.SetProperty(EVENT_PROP_TIME_EVENT,deal.TimeOpenMSC());                  // Event time (position open time)
-         event.SetProperty(EVENT_PROP_REASON_EVENT,reason);                            // Event reason (from the ENUM_EVENT_REASON enumeration)
-         event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,deal.TypeOrder());               // Event deal type
-         event.SetProperty(EVENT_PROP_TICKET_DEAL_EVENT,deal.Ticket());                // Event deal ticket
-         event.SetProperty(EVENT_PROP_MAGIC_ORDER,deal.Magic());                       // Order/deal/position magic number
-         event.SetProperty(EVENT_PROP_PRICE_EVENT,deal.PriceOpen());                   // Event price (position open price)
-         event.SetProperty(EVENT_PROP_PROFIT,deal.ProfitFull());                       // Profit
-         event.SetProperty(EVENT_PROP_SYMBOL,deal.Symbol());                           // Order symbol
-         event.SetProperty(EVENT_PROP_SYMBOL_BY_ID,deal.Symbol());                     // Opposite position symbol
-         event.SetProperty(EVENT_PROP_POSITION_ID,deal.PositionID());                  // Position ID
+         event.SetProperty(EVENT_PROP_TIME_EVENT,deal.TimeOpenMSC());                     // Event time (position open time)
+         event.SetProperty(EVENT_PROP_REASON_EVENT,reason);                               // Event reason (from the ENUM_EVENT_REASON enumeration)
+         event.SetProperty(EVENT_PROP_TYPE_DEAL_EVENT,deal.TypeOrder());                  // Event deal type
+         event.SetProperty(EVENT_PROP_TICKET_DEAL_EVENT,deal.Ticket());                   // Event deal ticket
+         event.SetProperty(EVENT_PROP_MAGIC_ORDER,deal.Magic());                          // Order/deal/position magic number
+         event.SetProperty(EVENT_PROP_PRICE_EVENT,deal.PriceOpen());                      // Event price (position open price)
+         event.SetProperty(EVENT_PROP_PROFIT,deal.ProfitFull());                          // Profit
+         event.SetProperty(EVENT_PROP_SYMBOL,deal.Symbol());                              // Order symbol
+         event.SetProperty(EVENT_PROP_SYMBOL_BY_ID,deal.Symbol());                        // Opposite position symbol
+         event.SetProperty(EVENT_PROP_POSITION_ID,deal.PositionID());                     // Position ID
          
          //--- Event order parameters
-         event.SetProperty(EVENT_PROP_TYPE_ORDER_EVENT,type_order_last_deal);          // Type of the order that triggered an event deal (the last position order)
-         event.SetProperty(EVENT_PROP_TICKET_ORDER_EVENT,ticket_order_last_deal);      // Ticket of the order, based on which an event deal is opened (the last position order)
-         event.SetProperty(EVENT_PROP_POSITION_BY_ID,order_last_deal.PositionByID());  // Opposite position ID
-         event.SetProperty(EVENT_PROP_PRICE_CLOSE,order_last_deal.PriceClose());       // Order close price (the last position order close price)
-         event.SetProperty(EVENT_PROP_VOLUME_ORDER_INITIAL,order_last_deal.Volume());  // Requested order volume
-         event.SetProperty(EVENT_PROP_VOLUME_ORDER_EXECUTED,vol_order_done);           // Executed order volume
-         event.SetProperty(EVENT_PROP_VOLUME_ORDER_CURRENT,vol_order_current);         // Remaining (unexecuted) order volume
-         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,order_last_deal.Magic());            // Opposite position magic number
+         event.SetProperty(EVENT_PROP_TYPE_ORDER_EVENT,type_order_last_deal);             // Type of the order that triggered an event deal (the last position order)
+         event.SetProperty(EVENT_PROP_TICKET_ORDER_EVENT,ticket_order_last_deal);         // Ticket of the order, based on which an event deal is opened (the last position order)
+         event.SetProperty(EVENT_PROP_POSITION_BY_ID,order_last_deal.PositionByID());     // Opposite position ID
+         event.SetProperty(EVENT_PROP_PRICE_CLOSE,order_last_deal.PriceClose());          // Order close price (the last position order close price)
+         event.SetProperty(EVENT_PROP_VOLUME_ORDER_INITIAL,order_last_deal.Volume());     // Requested order volume
+         event.SetProperty(EVENT_PROP_VOLUME_ORDER_EXECUTED,vol_order_done);              // Executed order volume
+         event.SetProperty(EVENT_PROP_VOLUME_ORDER_CURRENT,vol_order_current);            // Remaining (unexecuted) order volume
+         event.SetProperty(EVENT_PROP_MAGIC_BY_ID,0);                                     // Opposite position magic number
             
          //--- Position parameters
-         event.SetProperty(EVENT_PROP_TYPE_ORDER_POSITION,type_order_first_deal);      // Type of the order that triggered the first position deal
-         event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,ticket_order_first_deal);  // Ticket of the order, based on which a position deal is opened (the first position order)
-         event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order_first_deal.TimeOpenMSC());  // Time of the order, based on which a position deal is opened (the first position order)
-         event.SetProperty(EVENT_PROP_PRICE_OPEN,order_first_deal.PriceOpen());        // Position first order open price
-         event.SetProperty(EVENT_PROP_PRICE_SL,order_first_deal.StopLoss());           // StopLoss price (Position order StopLoss price)
-         event.SetProperty(EVENT_PROP_PRICE_TP,order_first_deal.TakeProfit());         // TakeProfit price (Position order TakeProfit price)
-         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,type_position_previous);     // Position order type before changing the direction
-         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,ticket_position_previous); // Position order ticket before changing direction
-         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,type_position_current);     // Current position order type
-         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,ticket_position_current); // Current position order ticket
-         event.SetProperty(EVENT_PROP_VOLUME_POSITION_EXECUTED,vol_position);          // Executed position volume
+         event.SetProperty(EVENT_PROP_TYPE_ORDER_POSITION,type_order_first_deal);         // Type of the order that triggered the first position deal
+         event.SetProperty(EVENT_PROP_TICKET_ORDER_POSITION,ticket_order_first_deal);     // Ticket of the order, based on which a position deal is opened (the first position order)
+         event.SetProperty(EVENT_PROP_TIME_ORDER_POSITION,order_first_deal.TimeOpenMSC());// Time of the order, based on which a position deal is opened (the first position order)
+         event.SetProperty(EVENT_PROP_PRICE_OPEN,order_first_deal.PriceOpen());           // Position first order open price
+         event.SetProperty(EVENT_PROP_PRICE_SL,order_first_deal.StopLoss());              // StopLoss price (Position order StopLoss price)
+         event.SetProperty(EVENT_PROP_PRICE_TP,order_first_deal.TakeProfit());            // TakeProfit price (Position order TakeProfit price)
+         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_BEFORE,type_position_previous);        // Position order type before changing the direction
+         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_BEFORE,ticket_position_previous);    // Position order ticket before changing direction
+         event.SetProperty(EVENT_PROP_TYPE_ORD_POS_CURRENT,type_position_current);        // Current position order type
+         event.SetProperty(EVENT_PROP_TICKET_ORD_POS_CURRENT,ticket_position_current);    // Current position order ticket
+         event.SetProperty(EVENT_PROP_VOLUME_POSITION_EXECUTED,vol_position);             // Executed position volume
+
+         event.SetProperty(EVENT_PROP_PRICE_OPEN_BEFORE,order_first_deal.PriceOpen());    // Order price before modification
+         event.SetProperty(EVENT_PROP_PRICE_SL_BEFORE,order_first_deal.StopLoss());       // StopLoss price before modification
+         event.SetProperty(EVENT_PROP_PRICE_TP_BEFORE,order_first_deal.TakeProfit());     // TakeProfit price before modification
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_ASK,ask);                               // Ask price during an event
+         event.SetProperty(EVENT_PROP_PRICE_EVENT_BID,bid);                               // Bid price during an event
          
          //--- Set the control program chart ID, decode the event code and set the event type
          event.SetChartID(this.m_chart_id);

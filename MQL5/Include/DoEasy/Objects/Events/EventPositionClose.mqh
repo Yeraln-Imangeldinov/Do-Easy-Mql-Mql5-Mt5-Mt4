@@ -64,16 +64,14 @@ void CEventPositionClose::SendEvent(void)
 //+------------------------------------------------------------------+
 string CEventPositionClose::EventsMessage(void)
   {
-//--- number of decimal places in an event symbol quote
-   int digits=(int)::SymbolInfoInteger(this.Symbol(),SYMBOL_DIGITS);
 //--- (1) header, (2) executed order volume, (3) executed position volume, (4) event price,
 //--- (5) StopLoss price, (6) TakeProfit price, (7) magic number, (6) profit in account currency, (7,8) closure message variants
    string head="- "+this.TypeEventDescription()+": "+TimeMSCtoString(this.TimePosition())+" -\n";
    string vol_ord=::DoubleToString(this.VolumeOrderExecuted(),DigitsLots(this.Symbol()));
    string vol_pos=::DoubleToString(this.VolumePositionExecuted(),DigitsLots(this.Symbol()));
-   string price=TextByLanguage(" по цене "," at price ")+::DoubleToString(this.PriceEvent(),digits);
-   string sl=(this.PriceStopLoss()>0 ? ", sl "+ ::DoubleToString(this.PriceStopLoss(),digits) : "");
-   string tp=(this.PriceTakeProfit()>0 ? ", tp "+ ::DoubleToString(this.PriceTakeProfit(),digits) : "");
+   string price=TextByLanguage(" по цене "," at price ")+::DoubleToString(this.PriceEvent(),this.m_digits);
+   string sl=(this.PriceStopLoss()>0 ? ", sl "+ ::DoubleToString(this.PriceStopLoss(),this.m_digits) : "");
+   string tp=(this.PriceTakeProfit()>0 ? ", tp "+ ::DoubleToString(this.PriceTakeProfit(),this.m_digits) : "");
    string magic=(this.Magic()!=0 ? TextByLanguage(", магик ",", magic ")+(string)this.Magic() : "");
    string profit=TextByLanguage(", профит ",", profit ")+::DoubleToString(this.Profit(),this.m_digits_acc)+" "+::AccountInfoString(ACCOUNT_CURRENCY);
    string close=TextByLanguage("Закрыт ","Close ");

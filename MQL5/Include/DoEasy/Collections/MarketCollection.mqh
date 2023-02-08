@@ -267,10 +267,10 @@ void CMarketCollection::OnChangeEvent(COrder* order,const int index)
         }
      }
   }
-//+------------------------------------------------------------------------+
-//| Select market orders or positions from the collection with the time    |
-//| from begin_time to end_time                                            |
-//+------------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Select market orders or positions from the collection with the time |
+//| from begin_time to end_time                                         |
+//+---------------------------------------------------------------------+
 CArrayObj* CMarketCollection::GetListByTime(const datetime begin_time=0,const datetime end_time=0)
   {
    CArrayObj* list=new CArrayObj();
@@ -400,9 +400,9 @@ bool CMarketCollection::AddToListChanges(COrderControl* order_control)
      }
    return true;
   }
-//+----------------------------------------------------------------------+
-//| Convert the order price and its type into a number for the hash sum  |
-//+----------------------------------------------------------------------+
+//+--------------------------------------------------------------------+
+//| Convert the order price and its type into a number for the hash sum|
+//+--------------------------------------------------------------------+
 ulong CMarketCollection::ConvertToHS(COrder *order) const
   {
    if(order==NULL)
